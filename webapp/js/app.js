@@ -71,6 +71,14 @@ function buildMap() {
   state.layers.route = L.layerGroup().addTo(state.map);
 
   state.map.on('click', onMapClick);
+  // ズーム/移動で間引きレイヤーを再描画
+  let gateTimer;
+  state.map.on('moveend zoomend', () => {
+    clearTimeout(gateTimer);
+    gateTimer = setTimeout(() => {
+      for (const name of Object.keys(GATED)) if (state.visible[name]) renderLayer(name);
+    }, 120);
+  });
 }
 
 /* ---------------- データ読込・描画 ---------------- */
@@ -88,16 +96,45 @@ async function loadAllData() {
   }));
 }
 
+// 大量地物のレイヤーは、表示範囲＋最小ズームでマーカーを間引く(コックピットで見やすく・軽量に)
+const GATED = { heliports: 8 };
+
 function renderLayer(name) {
   const grp = state.layers[name];
   grp.clearLayers();
   const gj = state.data[name];
   if (!gj) return;
   if (name === 'hazards') return renderHazards(gj, grp);
-  L.geoJSON(gj, {
-    pointToLayer: (f, latlng) => L.marker(latlng, { icon: facilityIcon(f), keyboard: false }),
-    onEachFeature: (f, layer) => layer.on('click', ev => { L.DomEvent.stop(ev); openFacility(f); }),
-  }).addTo(grp);
+
+  const feats = gj.features || [];
+  let list = feats;
+  if (name in GATED) {
+    if (state.map.getZoom() < GATED[name]) { updateGateNote(name, feats.length, 0); return; }
+    const b = state.map.getBounds();
+    list = feats.filter(f => {
+      const c = f.geometry && f.geometry.coordinates;
+      return c && b.contains([c[1], c[0]]);
+    });
+    // 描画上限(安全弁)。病院ヘリパッドを優先表示。
+    if (list.length > 400) {
+      list.sort((a, z) => (a.properties.type === 'hospital' ? 0 : 1) - (z.properties.type === 'hospital' ? 0 : 1));
+      list = list.slice(0, 400);
+    }
+    updateGateNote(name, feats.length, list.length);
+  }
+  for (const f of list) {
+    const c = f.geometry.coordinates;
+    L.marker([c[1], c[0]], { icon: facilityIcon(f), keyboard: false })
+      .on('click', ev => { L.DomEvent.stop(ev); openFacility(f); })
+      .addTo(grp);
+  }
+}
+
+function updateGateNote(name, total, shown) {
+  if (name !== 'heliports') return;
+  const btn = document.querySelector('.layer-toggle[data-layer="heliports"] .lbl');
+  if (!btn) return;
+  btn.textContent = shown === 0 ? 'ヘリ/病院' : `ヘリ/病院 ${shown}`;
 }
 
 function renderHazards(gj, grp) {
@@ -132,12 +169,17 @@ function openFacility(f) {
   const title = p.name || p.ident || '施設';
   const rows = [];
   if (p.ident) rows.push(['識別', p.ident + (p.iata ? ' / ' + p.iata : '')]);
+  if (p.class) rows.push(['種別', p.class]);
   if (p.kind) rows.push(['種別', p.kind]);
+  if (p.muni) rows.push(['所在', p.muni]);
   if (p.freq != null) rows.push(['周波数', p.freq + ' MHz']);
   else if (p.type === 'navaid') rows.push(['周波数', '要 AIP 照合']);
+  if (p.freqs) {
+    const fl = Object.entries(p.freqs).map(([k, v]) => `${k} ${v}`).join(' / ');
+    rows.push(['通信', fl]);
+  }
   if (p.elev_ft != null) rows.push(['標高', p.elev_ft.toLocaleString() + ' ft']);
-  if (p.rwy_ft != null) rows.push(['滑走路', p.rwy_ft.toLocaleString() + ' ft']);
-  if (p.twr != null) rows.push(['TWR', p.twr ? 'あり' : 'なし']);
+  if (p.rwy_ft != null) rows.push(['滑走路', `${p.rwy_ft.toLocaleString()} ft` + (p.rwy ? ` (RWY ${p.rwy})` : '') + (p.rwy_cnt > 1 ? ` ×${p.rwy_cnt}` : '')]);
   if (p.cat) rows.push(['区分', p.cat]);
   if (p.note) rows.push(['備考', p.note]);
   rows.push(['座標', `${lat.toFixed(4)}, ${lon.toFixed(4)}`]);
