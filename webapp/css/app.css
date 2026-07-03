@@ -118,6 +118,8 @@ body.theme-night .leaflet-tile-pane { filter: brightness(0.55) contrast(1.05) sa
 .kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; font-size: 15px; margin-bottom: 12px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+.sheet-warn { font-size: 12px; line-height: 1.5; color: var(--fg); background: rgba(255,159,28,.14);
+  border: 1px solid var(--hazard); border-radius: 10px; padding: 8px 10px; margin: 0 0 12px; }
 .sheet-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn-primary, .btn-ghost {
   flex: 1; min-height: var(--touch); border-radius: 12px; font-size: 16px; font-weight: 600;

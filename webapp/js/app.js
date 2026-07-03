@@ -196,11 +196,15 @@ function openFacility(f) {
   }
 
   const kv = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('');
+  const warn = p.type === 'navaid'
+    ? `<div class="sheet-warn">⚠️ 周波数・位置はオープンデータ(OurAirports)由来で、日本の航法無線施設は再編により<b>古い/相違の可能性</b>があります。必ず最新の AIP Japan で照合してください。</div>`
+    : '';
   document.getElementById('sheet-body').innerHTML = `
     <div class="sheet-title">${escapeHtml(title)}</div>
     <div class="sheet-sub">${escapeHtml(p.name_en || typeLabel(p.type))}</div>
     ${fromOwn}
     <dl class="kv">${kv}</dl>
+    ${warn}
     <div class="sheet-actions">
       <button class="btn-primary" id="sheet-add">＋ ルートに追加</button>
       <button class="btn-ghost" id="sheet-direct">→ ダイレクト</button>
