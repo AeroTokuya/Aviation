@@ -1,0 +1,13 @@
+{
+  "type": "FeatureCollection",
+  "meta": {
+    "dataset": "powerlines_sample",
+    "note": "送電線ハザードのサンプル(概略・不完全)。実運用では [ハザード取得] ボタンで表示範囲の OpenStreetMap power=line/tower を取得し、端末にキャッシュしてください。送電線は低高度飛行の重大障害物です — 本レイヤは網羅的ではありません。",
+    "source": "サンプル(要 OSM/公式データ取得)",
+    "updated": "2026-07-03"
+  },
+  "features": [
+    { "type": "Feature", "properties": { "type": "powerline", "name": "サンプル送電線 (房総)", "sample": true }, "geometry": { "type": "LineString", "coordinates": [[139.90, 35.30], [139.98, 35.38], [140.08, 35.45]] } },
+    { "type": "Feature", "properties": { "type": "powerline", "name": "サンプル送電線 (多摩)", "sample": true }, "geometry": { "type": "LineString", "coordinates": [[139.30, 35.62], [139.42, 35.66], [139.55, 35.70]] } }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "type": "FeatureCollection",
+  "meta": {
+    "dataset": "heliports_hospitals",
+    "note": "ドクターヘリ基地病院・公共ヘリポート等。座標は概算(施設所在地ベース)であり、ヘリポート正確位置・場外離着陸場の可否は必ず公式情報で照合すること。",
+    "source": "公開情報を基に整理",
+    "updated": "2026-07-03"
+  },
+  "features": [
+    { "type": "Feature", "properties": { "type": "heliport", "ident": "RJTI", "name": "東京ヘリポート", "name_en": "Tokyo Heliport", "elev_ft": 11, "cat": "heliport" }, "geometry": { "type": "Point", "coordinates": [139.8386, 35.5453] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "日本医科大学千葉北総病院", "name_en": "Nippon Medical School Chiba Hokusoh", "cat": "doctor-heli", "note": "国内ドクターヘリ発祥の基地病院" }, "geometry": { "type": "Point", "coordinates": [140.1568, 35.7952] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "君津中央病院", "name_en": "Kimitsu Chuo Hospital", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [139.9182, 35.3760] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "東海大学医学部付属病院", "name_en": "Tokai University Hospital", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [139.2942, 35.3833] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "済生会横浜市東部病院", "name_en": "Saiseikai Yokohama Tobu", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [139.6620, 35.5010] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "前橋赤十字病院", "name_en": "Maebashi Red Cross", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [139.0876, 36.3770] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "順天堂大学医学部附属静岡病院", "name_en": "Juntendo Shizuoka", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [138.9300, 35.0300] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "聖隷三方原病院", "name_en": "Seirei Mikatahara", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [137.7060, 34.7660] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "信州大学医学部附属病院", "name_en": "Shinshu University Hospital", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [137.9500, 36.2500] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "佐久総合病院佐久医療センター", "name_en": "Saku Medical Center", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [138.4800, 36.2500] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "愛知医科大学病院", "name_en": "Aichi Medical University", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [137.0500, 35.1800] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "大阪大学医学部附属病院", "name_en": "Osaka University Hospital", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [135.5300, 34.8200] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "神戸市立医療センター中央市民病院", "name_en": "Kobe Chuo Municipal", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [135.2100, 34.6600] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "川崎医科大学附属病院", "name_en": "Kawasaki Medical School", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [133.7100, 34.6300] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "広島大学病院", "name_en": "Hiroshima University Hospital", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [132.4700, 34.3900] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "久留米大学病院", "name_en": "Kurume University Hospital", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [130.5200, 33.3200] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "手稲渓仁会病院", "name_en": "Teine Keijinkai", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [141.2500, 43.1100] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "岩手医科大学附属病院", "name_en": "Iwate Medical University", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [141.1600, 39.6100] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "福島県立医科大学附属病院", "name_en": "Fukushima Medical University", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [140.4800, 37.6800] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "鹿児島市立病院", "name_en": "Kagoshima City Hospital", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [130.5600, 31.6000] } },
+    { "type": "Feature", "properties": { "type": "hospital", "name": "沖縄県立南部医療センター", "name_en": "Okinawa Nanbu Medical Center", "cat": "doctor-heli" }, "geometry": { "type": "Point", "coordinates": [127.7200, 26.1700] } }
+  ]
+}

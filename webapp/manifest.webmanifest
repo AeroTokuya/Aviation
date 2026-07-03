@@ -1,0 +1,17 @@
+{
+  "name": "HeliNav — VFR ヘリコプター ナビ",
+  "short_name": "HeliNav",
+  "description": "ヘリコプター操縦士向けの無料・軽量・オフライン対応 VFR ナビゲーション。空港・VOR・ドクターヘリ基地病院・送電線を地図表示。",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1622",
+  "theme_color": "#0b1622",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

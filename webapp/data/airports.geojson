@@ -1,0 +1,42 @@
+{
+  "type": "FeatureCollection",
+  "meta": {
+    "dataset": "airports",
+    "note": "参考用データ。運航前に必ず AIP Japan / AIS Japan の公式情報で照合すること。座標は WGS84。elev_ft は空港標高(概算)。",
+    "source": "公開情報(ICAO/IATA 公表値)を基に整理",
+    "updated": "2026-07-03"
+  },
+  "features": [
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJTT", "iata": "HND", "name": "東京国際空港(羽田)", "name_en": "Tokyo Haneda", "elev_ft": 35, "rwy_ft": 12000, "twr": true }, "geometry": { "type": "Point", "coordinates": [139.7811, 35.5533] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJAA", "iata": "NRT", "name": "成田国際空港", "name_en": "Narita", "elev_ft": 141, "rwy_ft": 13123, "twr": true }, "geometry": { "type": "Point", "coordinates": [140.3863, 35.7647] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJTF", "iata": "", "name": "調布飛行場", "name_en": "Chofu", "elev_ft": 141, "rwy_ft": 2650, "twr": false }, "geometry": { "type": "Point", "coordinates": [139.5281, 35.6717] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJTY", "iata": "OKO", "name": "横田飛行場", "name_en": "Yokota AB", "elev_ft": 463, "rwy_ft": 11000, "twr": true }, "geometry": { "type": "Point", "coordinates": [139.3486, 35.7485] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJOO", "iata": "ITM", "name": "大阪国際空港(伊丹)", "name_en": "Osaka Itami", "elev_ft": 50, "rwy_ft": 9843, "twr": true }, "geometry": { "type": "Point", "coordinates": [135.4383, 34.7855] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJBB", "iata": "KIX", "name": "関西国際空港", "name_en": "Kansai", "elev_ft": 26, "rwy_ft": 13123, "twr": true }, "geometry": { "type": "Point", "coordinates": [135.2441, 34.4342] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJGG", "iata": "NGO", "name": "中部国際空港(セントレア)", "name_en": "Chubu Centrair", "elev_ft": 15, "rwy_ft": 11500, "twr": true }, "geometry": { "type": "Point", "coordinates": [136.8054, 34.8584] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJNA", "iata": "NKM", "name": "名古屋飛行場(小牧)", "name_en": "Nagoya Komaki", "elev_ft": 52, "rwy_ft": 8990, "twr": true }, "geometry": { "type": "Point", "coordinates": [136.9244, 35.2551] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJFF", "iata": "FUK", "name": "福岡空港", "name_en": "Fukuoka", "elev_ft": 32, "rwy_ft": 9186, "twr": true }, "geometry": { "type": "Point", "coordinates": [130.4506, 33.5859] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJCC", "iata": "CTS", "name": "新千歳空港", "name_en": "New Chitose", "elev_ft": 82, "rwy_ft": 9843, "twr": true }, "geometry": { "type": "Point", "coordinates": [141.6923, 42.7752] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJSS", "iata": "SDJ", "name": "仙台空港", "name_en": "Sendai", "elev_ft": 15, "rwy_ft": 9840, "twr": true }, "geometry": { "type": "Point", "coordinates": [140.9169, 38.1397] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJSN", "iata": "KIJ", "name": "新潟空港", "name_en": "Niigata", "elev_ft": 29, "rwy_ft": 8202, "twr": true }, "geometry": { "type": "Point", "coordinates": [139.1211, 37.9558] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJNK", "iata": "KMQ", "name": "小松空港", "name_en": "Komatsu", "elev_ft": 36, "rwy_ft": 8858, "twr": true }, "geometry": { "type": "Point", "coordinates": [136.4066, 36.3946] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJOA", "iata": "HIJ", "name": "広島空港", "name_en": "Hiroshima", "elev_ft": 1088, "rwy_ft": 9840, "twr": true }, "geometry": { "type": "Point", "coordinates": [132.9196, 34.4361] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJOT", "iata": "TAK", "name": "高松空港", "name_en": "Takamatsu", "elev_ft": 607, "rwy_ft": 8202, "twr": true }, "geometry": { "type": "Point", "coordinates": [134.0156, 34.2142] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJOM", "iata": "MYJ", "name": "松山空港", "name_en": "Matsuyama", "elev_ft": 25, "rwy_ft": 8202, "twr": true }, "geometry": { "type": "Point", "coordinates": [132.6997, 33.8272] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJFK", "iata": "KOJ", "name": "鹿児島空港", "name_en": "Kagoshima", "elev_ft": 906, "rwy_ft": 9843, "twr": true }, "geometry": { "type": "Point", "coordinates": [130.7194, 31.8034] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJFT", "iata": "KMJ", "name": "熊本空港", "name_en": "Kumamoto", "elev_ft": 642, "rwy_ft": 9843, "twr": true }, "geometry": { "type": "Point", "coordinates": [130.8550, 32.8373] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJFU", "iata": "NGS", "name": "長崎空港", "name_en": "Nagasaki", "elev_ft": 15, "rwy_ft": 9840, "twr": true }, "geometry": { "type": "Point", "coordinates": [129.9137, 32.9169] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "ROAH", "iata": "OKA", "name": "那覇空港", "name_en": "Naha", "elev_ft": 12, "rwy_ft": 9843, "twr": true }, "geometry": { "type": "Point", "coordinates": [127.6459, 26.1958] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJCH", "iata": "HKD", "name": "函館空港", "name_en": "Hakodate", "elev_ft": 151, "rwy_ft": 9843, "twr": true }, "geometry": { "type": "Point", "coordinates": [140.8219, 41.7700] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJSK", "iata": "AXT", "name": "秋田空港", "name_en": "Akita", "elev_ft": 313, "rwy_ft": 8202, "twr": true }, "geometry": { "type": "Point", "coordinates": [140.2186, 39.6156] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJOB", "iata": "OKJ", "name": "岡山空港", "name_en": "Okayama", "elev_ft": 806, "rwy_ft": 9840, "twr": true }, "geometry": { "type": "Point", "coordinates": [133.8553, 34.7569] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJDT", "iata": "TSJ", "name": "対馬空港", "name_en": "Tsushima", "elev_ft": 213, "rwy_ft": 6234, "twr": false }, "geometry": { "type": "Point", "coordinates": [129.3306, 34.2849] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJKA", "iata": "ASJ", "name": "奄美空港", "name_en": "Amami", "elev_ft": 27, "rwy_ft": 6562, "twr": false }, "geometry": { "type": "Point", "coordinates": [129.7125, 28.4306] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJTO", "iata": "OIM", "name": "大島空港", "name_en": "Oshima", "elev_ft": 128, "rwy_ft": 5905, "twr": false }, "geometry": { "type": "Point", "coordinates": [139.3603, 34.7820] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJAW", "iata": "IWO", "name": "硫黄島", "name_en": "Iwo Jima", "elev_ft": 384, "rwy_ft": 8858, "twr": true }, "geometry": { "type": "Point", "coordinates": [141.3230, 24.7840] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJSF", "iata": "FKS", "name": "福島空港", "name_en": "Fukushima", "elev_ft": 1221, "rwy_ft": 8202, "twr": false }, "geometry": { "type": "Point", "coordinates": [140.4308, 37.2274] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJSM", "iata": "MSJ", "name": "三沢飛行場", "name_en": "Misawa", "elev_ft": 119, "rwy_ft": 10000, "twr": true }, "geometry": { "type": "Point", "coordinates": [141.3684, 40.7032] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJTA", "iata": "NJA", "name": "厚木飛行場", "name_en": "Atsugi", "elev_ft": 205, "rwy_ft": 8010, "twr": true }, "geometry": { "type": "Point", "coordinates": [139.4500, 35.4547] } },
+    { "type": "Feature", "properties": { "type": "airport", "ident": "RJSA", "iata": "AOJ", "name": "青森空港", "name_en": "Aomori", "elev_ft": 664, "rwy_ft": 9843, "twr": false }, "geometry": { "type": "Point", "coordinates": [140.6906, 40.7347] } }
+  ]
+}

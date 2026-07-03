@@ -1,0 +1,19 @@
+{
+  "type": "FeatureCollection",
+  "meta": {
+    "dataset": "navaids",
+    "note": "VOR/VORTAC/VOR-DME のサンプル。位置は主要空港付近の概算。周波数(freq)は安全上あえて空欄にしてあります。必ず AIP Japan の公式値を確認し、[データ取込] から公式データで置き換えてください。",
+    "source": "位置=公開空港座標ベースの概算 / 周波数=未収録(要公式照合)",
+    "updated": "2026-07-03"
+  },
+  "features": [
+    { "type": "Feature", "properties": { "type": "navaid", "kind": "VORTAC", "ident": "HME", "name": "羽田 付近 VORTAC (要照合)", "freq": null }, "geometry": { "type": "Point", "coordinates": [139.7811, 35.5533] } },
+    { "type": "Feature", "properties": { "type": "navaid", "kind": "VOR/DME", "ident": "NRE", "name": "成田 付近 VOR/DME (要照合)", "freq": null }, "geometry": { "type": "Point", "coordinates": [140.3863, 35.7647] } },
+    { "type": "Feature", "properties": { "type": "navaid", "kind": "VORTAC", "ident": "KEC", "name": "関西 付近 VORTAC (要照合)", "freq": null }, "geometry": { "type": "Point", "coordinates": [135.2441, 34.4342] } },
+    { "type": "Feature", "properties": { "type": "navaid", "kind": "VORTAC", "ident": "CVC", "name": "中部 付近 VORTAC (要照合)", "freq": null }, "geometry": { "type": "Point", "coordinates": [136.8054, 34.8584] } },
+    { "type": "Feature", "properties": { "type": "navaid", "kind": "VOR/DME", "ident": "SDE", "name": "仙台 付近 VOR/DME (要照合)", "freq": null }, "geometry": { "type": "Point", "coordinates": [140.9169, 38.1397] } },
+    { "type": "Feature", "properties": { "type": "navaid", "kind": "VORTAC", "ident": "CHE", "name": "新千歳 付近 VORTAC (要照合)", "freq": null }, "geometry": { "type": "Point", "coordinates": [141.6923, 42.7752] } },
+    { "type": "Feature", "properties": { "type": "navaid", "kind": "VOR/DME", "ident": "FKE", "name": "福岡 付近 VOR/DME (要照合)", "freq": null }, "geometry": { "type": "Point", "coordinates": [130.4506, 33.5859] } },
+    { "type": "Feature", "properties": { "type": "navaid", "kind": "VOR/DME", "ident": "NHC", "name": "那覇 付近 VOR/DME (要照合)", "freq": null }, "geometry": { "type": "Point", "coordinates": [127.6459, 26.1958] } }
+  ]
+}

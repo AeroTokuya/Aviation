@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>HeliNav — VFR ヘリコプター ナビ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1622" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="HeliNav" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="lib/leaflet/leaflet.css" />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body class="theme-day">
+  <div id="map"></div>
+
+  <!-- 上部バー -->
+  <header id="topbar">
+    <div class="brand">🚁 HeliNav <span class="tag">VFR</span></div>
+    <div id="statusline">
+      <span id="gps-status" class="stat">GPS --</span>
+      <span id="net-status" class="stat">オフライン準備中</span>
+    </div>
+    <button id="btn-theme" class="iconbtn" title="昼夜切替" aria-label="昼夜切替">🌙</button>
+  </header>
+
+  <!-- 左サイド：レイヤー切替（大きなタッチ） -->
+  <nav id="layerbar" aria-label="表示レイヤー">
+    <button class="layer-toggle active" data-layer="airports"><span class="ic">✈️</span><span class="lbl">空港</span></button>
+    <button class="layer-toggle active" data-layer="heliports"><span class="ic">🏥</span><span class="lbl">ヘリ/病院</span></button>
+    <button class="layer-toggle active" data-layer="navaids"><span class="ic">📡</span><span class="lbl">VOR</span></button>
+    <button class="layer-toggle active" data-layer="hazards"><span class="ic">⚡</span><span class="lbl">送電線</span></button>
+    <button class="layer-toggle active" data-layer="route"><span class="ic">🧭</span><span class="lbl">ルート</span></button>
+  </nav>
+
+  <!-- 右下：主要アクション -->
+  <div id="actionbar">
+    <button id="btn-locate" class="fab" title="現在地" aria-label="現在地">◎</button>
+    <button id="btn-route" class="fab" title="ルート作成" aria-label="ルート作成">✚</button>
+    <button id="btn-menu" class="fab" title="メニュー" aria-label="メニュー">☰</button>
+  </div>
+
+  <!-- ルート情報バー -->
+  <div id="routebar" class="hidden">
+    <div class="rb-head">
+      <strong>ルート</strong>
+      <span id="rb-summary">距離 -- / 区間 --</span>
+      <span class="rb-spacer"></span>
+      <button id="rb-clear" class="minibtn">クリア</button>
+      <button id="rb-close" class="minibtn">閉じる</button>
+    </div>
+    <div id="rb-legs"></div>
+    <div class="rb-hint">地図をタップでウェイポイント追加。施設の詳細から「ルートに追加」も可。</div>
+  </div>
+
+  <!-- 施設情報 ボトムシート -->
+  <div id="sheet" class="hidden" role="dialog" aria-label="施設情報">
+    <div class="sheet-grab"></div>
+    <div id="sheet-body"></div>
+  </div>
+
+  <!-- メニュー -->
+  <div id="menu" class="hidden">
+    <div class="menu-panel">
+      <div class="menu-head"><strong>メニュー</strong><button id="menu-close" class="minibtn">×</button></div>
+      <button class="menu-item" id="mi-save-area"><span>🗺️</span> 表示エリアをオフライン保存</button>
+      <button class="menu-item" id="mi-hazards"><span>⚡</span> 表示範囲のハザード取得 (OSM)</button>
+      <button class="menu-item" id="mi-import"><span>📥</span> 公式/自作 GeoJSON を取込</button>
+      <input type="file" id="import-file" accept=".geojson,.json" hidden />
+      <div class="menu-row">
+        <label>磁気偏差(西+): <input type="number" id="magvar" value="8" step="0.5" style="width:4em"> °</label>
+      </div>
+      <div class="menu-row">
+        <label>地上速度(ETA用): <input type="number" id="gs" value="110" step="5" style="width:5em"> kt</label>
+      </div>
+      <div class="menu-note" id="cache-note"></div>
+      <div class="menu-disclaimer">
+        ⚠️ <b>参考情報アプリです。</b>本アプリのデータは概略・未検証を含みます。
+        飛行前ブリーフィング・航空図・AIP Japan・NOTAM 等の公式情報で必ず確認し、
+        最終判断はパイロットが行ってください。運航用の航法計器の代替にはなりません。
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+
+  <script src="lib/leaflet/leaflet.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
