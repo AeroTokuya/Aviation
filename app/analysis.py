@@ -33,6 +33,13 @@ VISIBILITY_CAP_KM = 50.0
 # 現在画像の平均輝度がこの値未満なら夜間・低照度とみなし推定しない
 LOW_LIGHT_THRESHOLD = 40.0
 
+# 画角ズレ補正: 位相相関の信頼度がこの値未満なら補正しない
+# (濃霧などでテクスチャが乏しいとズレ推定自体が信頼できないため)
+ALIGN_MIN_RESPONSE = 0.10
+# 画角ズレ補正: 画像幅に対するこの割合を超えるズレは「向きが変わった」と
+# みなし、平行移動では補正しない
+ALIGN_MAX_SHIFT_FRAC = 0.06
+
 # 雲量 (8分量) → 記号
 OKTA_LABELS = [
     (0, "SKC"),
@@ -340,6 +347,35 @@ def flight_category(
     return ["LIFR", "IFR", "MVFR", "VFR"][min(vis_cat(visibility_km), ceil_cat(ceil))]
 
 
+def align_current_to_reference(
+    reference: np.ndarray, current: np.ndarray
+) -> tuple[np.ndarray, tuple[float, float], bool]:
+    """現在画像の画角ズレ (平行移動) を位相相関で検出し補正する。
+
+    実運用のカメラは風や再設置でわずかに向きがズレることがあり、
+    そのままでは bbox が別の場所を指してしまう。位相相関の信頼度が
+    低い (霧で模様がない等) 場合やズレが大きすぎる場合は補正しない。
+
+    戻り値: (補正後の現在画像, 検出ズレ (dx, dy) px, 補正を適用したか)
+    """
+    h, w = reference.shape[:2]
+    ref_g = _to_gray(reference).astype(np.float32)
+    cur_g = _to_gray(current).astype(np.float32)
+    win = cv2.createHanningWindow((w, h), cv2.CV_32F)
+    (dx, dy), response = cv2.phaseCorrelate(ref_g, cur_g, win)
+    max_shift = ALIGN_MAX_SHIFT_FRAC * w
+    if response < ALIGN_MIN_RESPONSE or abs(dx) > max_shift or abs(dy) > max_shift:
+        return current, (dx, dy), False
+    if abs(dx) < 0.5 and abs(dy) < 0.5:
+        return current, (dx, dy), False  # 補正不要
+    # phaseCorrelate は「current が reference からどれだけずれているか」を返す
+    m = np.float32([[1, 0, -dx], [0, 1, -dy]])
+    warped = cv2.warpAffine(
+        current, m, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE
+    )
+    return warped, (dx, dy), True
+
+
 def is_low_light(current: np.ndarray) -> bool:
     """夜間・低照度画像かどうか。この状態ではコントラスト比較が成立しない。"""
     return float(np.mean(_to_gray(current))) < LOW_LIGHT_THRESHOLD
@@ -369,6 +405,8 @@ def analyze(
             notes=["夜間・低照度のため推定できません (日中の画像でのみ有効)"],
         )
 
+    current, (dx, dy), aligned = align_current_to_reference(reference, current)
+
     ordered = sorted(targets, key=lambda t: t.distance_km)
     ratios = [
         target_contrast_ratio(reference, current, t.bbox, sky_bbox) for t in ordered
@@ -385,6 +423,8 @@ def analyze(
         notes.append(
             f"雲量 {cover_label} (BKN 未満) のため正式なシーリングには該当しない可能性"
         )
+    if aligned:
+        notes.append(f"画角ズレを自動補正しました ({dx:+.1f}, {dy:+.1f} px)")
 
     return Estimate(
         visibility_km=vis_km,

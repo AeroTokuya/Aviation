@@ -27,6 +27,14 @@ def isolated_history(tmp_path, monkeypatch):
     monkeypatch.setattr(history_mod, "_last_recorded", {})
 
 
+@pytest.fixture(autouse=True)
+def no_network_metar(monkeypatch):
+    """テストが実ネットワークへ METAR を取りに行かないよう遮断する。"""
+    from app import metar as metar_mod
+
+    monkeypatch.setattr(metar_mod, "get_metar", lambda station: None)
+
+
 class TestListCameras:
     def test_returns_all_cameras_with_status(self):
         res = client.get("/api/cameras")

@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import analysis, history, sources
+from . import analysis, history, metar, sources
 from .config import CameraConfig, ROOT, load_cameras, save_camera_setup
 
 app = FastAPI(title="HeliWX", description="ヘリコプター運航向け 視程・シーリング推定")
@@ -119,6 +119,7 @@ def camera_estimate(cam_id: str) -> dict:
         "status": status,
         "has_reference": sources.reference_image(cam) is not None,
         "last_error": sources.last_error(cam_id),
+        "metar": metar.get_metar(cam.metar_station),
         "estimate": asdict(est) if est is not None else None,
         "setup": {
             "targets": [

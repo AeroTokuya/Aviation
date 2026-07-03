@@ -46,7 +46,8 @@
         "video_id": "e5fTf-gywY0"
       },
       "attribution": "SBS NEWS6 (YouTube ライブ配信)",
-      "page_url": "https://www.youtube.com/watch?v=e5fTf-gywY0"
+      "page_url": "https://www.youtube.com/watch?v=e5fTf-gywY0",
+      "metar_station": "RJNS"
     },
     {
       "id": "satta-pass",
@@ -62,7 +63,8 @@
         "video_id": "GsD9QQEKSzQ"
       },
       "attribution": "静岡市 (YouTube ライブ配信)",
-      "page_url": "https://www.youtube.com/watch?v=GsD9QQEKSzQ"
+      "page_url": "https://www.youtube.com/watch?v=GsD9QQEKSzQ",
+      "metar_station": "RJNS"
     },
     {
       "id": "odaiba-endaiba",
@@ -79,7 +81,8 @@
         "channel_id": "UCMaXtOvzgcCQt7MZwJmr7XA"
       },
       "attribution": "EN DAIBA (YouTube ライブ配信)",
-      "page_url": "https://www.youtube.com/channel/UCMaXtOvzgcCQt7MZwJmr7XA"
+      "page_url": "https://www.youtube.com/channel/UCMaXtOvzgcCQt7MZwJmr7XA",
+      "metar_station": "RJTT"
     },
     {
       "id": "yokohama-mm-tbs",
@@ -95,7 +98,8 @@
         "video_id": "x3P3N3VGvtU"
       },
       "attribution": "TBS NEWS DIG (YouTube ライブ配信)",
-      "page_url": "https://www.youtube.com/watch?v=x3P3N3VGvtU"
+      "page_url": "https://www.youtube.com/watch?v=x3P3N3VGvtU",
+      "metar_station": "RJTT"
     },
     {
       "id": "shonan-fujiview",
@@ -111,7 +115,8 @@
         "url": "https://www.shonan-monorail.co.jp/viewcamera/"
       },
       "attribution": "湘南モノレール株式会社",
-      "page_url": "https://www.shonan-monorail.co.jp/viewcamera/"
+      "page_url": "https://www.shonan-monorail.co.jp/viewcamera/",
+      "metar_station": "RJTA"
     },
     {
       "id": "tokyo-heliport-west",
@@ -177,7 +182,8 @@
             84
           ]
         }
-      ]
+      ],
+      "metar_station": "RJTT"
     },
     {
       "id": "yokohama-mm-southwest",
@@ -243,7 +249,8 @@
             201
           ]
         }
-      ]
+      ],
+      "metar_station": "RJTT"
     },
     {
       "id": "kawasaki-coast-east",
@@ -309,7 +316,8 @@
             167
           ]
         }
-      ]
+      ],
+      "metar_station": "RJTT"
     },
     {
       "id": "atsugi-north",
@@ -387,7 +395,8 @@
           ],
           "elevation_ft_msl": 450
         }
-      ]
+      ],
+      "metar_station": "RJTA"
     },
     {
       "id": "sapporo-sosei",
@@ -403,7 +412,8 @@
         "video_id": "kfIQBC0hrII"
       },
       "attribution": "YouTube ライブ配信 (いまの札幌／さっぽろ創世スクエア)",
-      "page_url": "https://www.youtube.com/watch?v=kfIQBC0hrII"
+      "page_url": "https://www.youtube.com/watch?v=kfIQBC0hrII",
+      "metar_station": "RJCO"
     },
     {
       "id": "sendai-markone",
@@ -419,7 +429,8 @@
         "video_id": "PcCg30tb25c"
       },
       "attribution": "ミヤギテレビ (YouTube ライブ配信)",
-      "page_url": "https://www.youtube.com/watch?v=PcCg30tb25c"
+      "page_url": "https://www.youtube.com/watch?v=PcCg30tb25c",
+      "metar_station": "RJSS"
     },
     {
       "id": "nagoya-station",
@@ -436,7 +447,8 @@
         "channel_id": "UCjmqhsGQ9J1QK4r5mUrZb4A"
       },
       "attribution": "YouTube ライブ配信 (名古屋駅ライブカメラ)",
-      "page_url": "https://www.youtube.com/channel/UCjmqhsGQ9J1QK4r5mUrZb4A/live"
+      "page_url": "https://www.youtube.com/channel/UCjmqhsGQ9J1QK4r5mUrZb4A/live",
+      "metar_station": "RJNA"
     },
     {
       "id": "osaka-shinsaibashi",
@@ -452,7 +464,8 @@
         "video_id": "YZMZSqz9fx8"
       },
       "attribution": "FST.NET (YouTube ライブ配信)",
-      "page_url": "https://www.youtube.com/watch?v=YZMZSqz9fx8"
+      "page_url": "https://www.youtube.com/watch?v=YZMZSqz9fx8",
+      "metar_station": "RJOO"
     },
     {
       "id": "fukuoka-tnc",
@@ -468,7 +481,8 @@
         "video_id": "CzgSFUAbE9s"
       },
       "attribution": "テレビ西日本 (YouTube ライブ配信)",
-      "page_url": "https://www.youtube.com/watch?v=CzgSFUAbE9s"
+      "page_url": "https://www.youtube.com/watch?v=CzgSFUAbE9s",
+      "metar_station": "RJFF"
     },
     {
       "id": "naha-kaiho",
@@ -484,7 +498,8 @@
         "url": "https://www6.kaiho.mlit.go.jp/11kanku/naha/11th_rcgh/livecamera/index.html"
       },
       "attribution": "第十一管区海上保安本部",
-      "page_url": "https://www6.kaiho.mlit.go.jp/11kanku/naha/11th_rcgh/livecamera/index.html"
+      "page_url": "https://www6.kaiho.mlit.go.jp/11kanku/naha/11th_rcgh/livecamera/index.html",
+      "metar_station": "ROAH"
     }
   ]
 }

@@ -137,6 +137,51 @@ class TestCeiling:
         assert notes
 
 
+def shift_image(img: np.ndarray, dx: int, dy: int) -> np.ndarray:
+    import cv2
+
+    m = np.float32([[1, 0, dx], [0, 1, dy]])
+    return cv2.warpAffine(
+        img, m, (img.shape[1], img.shape[0]), borderMode=cv2.BORDER_REPLICATE
+    )
+
+
+class TestAlignment:
+    def test_detects_and_corrects_shift(self):
+        ref, cur, boxes = make_scene([0.6, 0.8])
+        shifted = shift_image(cur, 8, 5)
+        fixed, (dx, dy), applied = analysis.align_current_to_reference(ref, shifted)
+        assert applied
+        assert dx == pytest.approx(8, abs=1.5)
+        assert dy == pytest.approx(5, abs=1.5)
+
+    def test_estimation_survives_camera_shift(self):
+        # ズレた現在画像でも補正により推定が成立する
+        v_true = 8.0
+        dists = [1.0, 3.0, 6.0]
+        atten = [np.exp(-3.912 * d / v_true) for d in dists]
+        ref, cur, boxes = make_scene(atten)
+        shifted = shift_image(cur, 9, 6)
+        targets = [
+            Target(name=f"t{i}", distance_km=d, bbox=boxes[i])
+            for i, d in enumerate(dists)
+        ]
+        est = analysis.analyze(ref, shifted, targets)
+        assert est.visibility_km == pytest.approx(v_true, rel=0.4)
+        assert any("画角ズレ" in n for n in est.notes)
+
+    def test_no_correction_when_not_shifted(self):
+        ref, cur, boxes = make_scene([0.6])
+        _, _, applied = analysis.align_current_to_reference(ref, cur)
+        assert not applied
+
+    def test_huge_shift_rejected(self):
+        ref, cur, boxes = make_scene([0.6, 0.8])
+        shifted = shift_image(cur, 120, 0)  # 幅の6%超 → 向きが変わったとみなす
+        _, _, applied = analysis.align_current_to_reference(ref, shifted)
+        assert not applied
+
+
 class TestLowLight:
     def test_night_image_returns_unknown(self):
         ref, cur, boxes = make_scene([0.5])

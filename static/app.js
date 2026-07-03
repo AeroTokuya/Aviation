@@ -202,6 +202,15 @@ async function openPanel(camId) {
       : "—";
   }
 
+  // METAR (最寄り観測局が設定されているカメラのみ)
+  show("metar-section", !!data.metar);
+  if (data.metar) {
+    document.getElementById("metar-raw").textContent = data.metar.raw;
+    document.getElementById("metar-stale").textContent = data.metar.stale
+      ? "(取得失敗のため前回値)"
+      : "";
+  }
+
   // 視程トレンド (推定ありのカメラのみ)
   show("trend-section", false);
   if (est && est.visibility_km != null) loadTrend(camId);

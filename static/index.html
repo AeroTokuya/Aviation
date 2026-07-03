@@ -44,6 +44,12 @@
         </div>
       </div>
 
+      <div id="metar-section" class="hidden">
+        <div class="img-title">METAR (最寄り観測局) <span id="metar-stale" class="muted"></span></div>
+        <code id="metar-raw"></code>
+        <div class="muted">出典: aviationweather.gov</div>
+      </div>
+
       <div id="trend-section" class="hidden">
         <div class="img-title">視程の推移 (直近12時間) <span id="trend-arrow"></span></div>
         <canvas id="trend-canvas" height="64"></canvas>

@@ -34,6 +34,7 @@ class CameraConfig:
     description: str = ""
     attribution: str = ""  # 映像提供元の表記
     page_url: str = ""  # 提供元ページ (出典リンク)
+    metar_station: str = ""  # 最寄り METAR 観測局 (ICAO 4 文字。例: RJTT)
 
     @staticmethod
     def from_dict(d: dict) -> "CameraConfig":
@@ -68,6 +69,7 @@ class CameraConfig:
             description=d.get("description", ""),
             attribution=d.get("attribution", ""),
             page_url=d.get("page_url", ""),
+            metar_station=d.get("metar_station", ""),
         )
 
 
