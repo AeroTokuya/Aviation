@@ -76,3 +76,32 @@ def load_cameras(path: Path = CONFIG_PATH) -> dict[str, CameraConfig]:
         raw = json.load(f)
     cameras = [CameraConfig.from_dict(c) for c in raw["cameras"]]
     return {c.id: c for c in cameras}
+
+
+def save_camera_setup(
+    cam_id: str,
+    targets: list[dict],
+    sky_bbox: Optional[list[int]],
+    path: Path = CONFIG_PATH,
+) -> CameraConfig:
+    """カメラのターゲットと空領域を config ファイルに永続化する。
+
+    他のフィールドは一切変更しない。更新後の CameraConfig を返す。
+    """
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    for entry in raw["cameras"]:
+        if entry["id"] == cam_id:
+            entry["targets"] = targets
+            if sky_bbox:
+                entry["sky_bbox"] = sky_bbox
+            else:
+                entry.pop("sky_bbox", None)
+            break
+    else:
+        raise KeyError(f"カメラ {cam_id} は設定に存在しません")
+    tmp = path.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(raw, f, ensure_ascii=False, indent=2)
+    tmp.replace(path)
+    return CameraConfig.from_dict(entry)

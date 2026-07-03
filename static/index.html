@@ -53,6 +53,37 @@
         <img id="img-reference" alt="晴天時の基準画像">
       </div>
       <button id="capture-reference" class="hidden action-btn">現在の画像を晴天時基準画像として保存</button>
+      <button id="open-editor" class="hidden action-btn">ターゲット設定エディタ</button>
+
+      <div id="editor" class="hidden">
+        <div class="img-title">基準画像上をドラッグして矩形を描き、ターゲットを登録</div>
+        <div id="editor-wrap">
+          <img id="editor-img" alt="基準画像 (編集用)">
+          <canvas id="editor-canvas"></canvas>
+        </div>
+        <div id="editor-form" class="hidden">
+          <div class="ef-grid">
+            <label>名前<input id="ef-name" placeholder="例: 富士山"></label>
+            <label>距離 (km)<input id="ef-dist" type="number" step="0.1" min="0.1"></label>
+            <label>頂部標高 ft MSL (任意)<input id="ef-elev" type="number" step="10"></label>
+          </div>
+          <details class="ef-latlon">
+            <summary>目標の緯度・経度から距離を計算</summary>
+            <div class="ef-grid">
+              <label>緯度<input id="ef-lat" type="number" step="0.0001" placeholder="35.3606"></label>
+              <label>経度<input id="ef-lon" type="number" step="0.0001" placeholder="138.7274"></label>
+              <button id="ef-calc" type="button">計算</button>
+            </div>
+          </details>
+          <div class="ef-row">
+            <button id="ef-add" type="button">ターゲット追加</button>
+            <button id="ef-sky" type="button">この矩形を空領域に</button>
+            <button id="ef-cancel" type="button">取消</button>
+          </div>
+        </div>
+        <ul id="editor-targets"></ul>
+        <button id="ef-save" type="button" class="action-btn primary">設定を保存 (推定を更新)</button>
+      </div>
 
       <div id="targets-section">
         <h3>ターゲット別の視認状況</h3>

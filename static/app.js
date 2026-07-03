@@ -211,6 +211,15 @@ async function openPanel(camId) {
     document.getElementById("img-time").textContent = new Date().toLocaleTimeString("ja-JP");
   }
 
+  // ターゲット設定エディタ (基準画像があるカメラのみ)
+  if (!editor || editor.camId !== camId) {
+    document.getElementById("editor").classList.add("hidden");
+    editor = null;
+  }
+  const editBtn = document.getElementById("open-editor");
+  show("open-editor", isImage && data.has_reference);
+  editBtn.onclick = () => toggleEditor(data);
+
   // 基準画像の取得ボタン (取得可能なリモートカメラのみ)
   const capBtn = document.getElementById("capture-reference");
   show("capture-reference", isImage && cam.source_type !== "local");
@@ -258,6 +267,215 @@ async function openPanel(camId) {
     }
   }
 }
+
+/* ---------- ターゲット設定エディタ ---------- */
+
+let editor = null; // {camId, camLat, camLon, targets, skyBbox, pending}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371.0;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function editorScale() {
+  const img = document.getElementById("editor-img");
+  return { sx: img.clientWidth / img.naturalWidth, sy: img.clientHeight / img.naturalHeight };
+}
+
+function editorRedraw() {
+  if (!editor) return;
+  const img = document.getElementById("editor-img");
+  const canvas = document.getElementById("editor-canvas");
+  if (!img.naturalWidth) return;
+  canvas.width = img.clientWidth;
+  canvas.height = img.clientHeight;
+  const { sx, sy } = editorScale();
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = "11px sans-serif";
+
+  const drawBox = (bbox, stroke, fill, label) => {
+    const [x, y, w, h] = bbox;
+    ctx.fillStyle = fill;
+    ctx.fillRect(x * sx, y * sy, w * sx, h * sy);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.6;
+    ctx.strokeRect(x * sx, y * sy, w * sx, h * sy);
+    if (label) {
+      ctx.fillStyle = stroke;
+      ctx.fillText(label, x * sx + 2, Math.max(y * sy - 3, 10));
+    }
+  };
+
+  if (editor.skyBbox) drawBox(editor.skyBbox, "#0aa0c8", "rgba(10,160,200,.12)", "空領域");
+  for (const t of editor.targets) {
+    drawBox(t.bbox, "#1f6fd6", "rgba(31,111,214,.12)", `${t.name} (${t.distance_km}km)`);
+  }
+  if (editor.pending) {
+    ctx.setLineDash([5, 4]);
+    drawBox(editor.pending, "#e07b00", "rgba(224,123,0,.15)", "新規");
+    ctx.setLineDash([]);
+  }
+}
+
+function editorRenderList() {
+  const ul = document.getElementById("editor-targets");
+  ul.innerHTML = "";
+  editor.targets.forEach((t, i) => {
+    const li = document.createElement("li");
+    const elev = t.elevation_ft_msl != null ? ` / ${t.elevation_ft_msl}ft` : "";
+    const span = document.createElement("span");
+    span.textContent = `${t.name} — ${t.distance_km}km${elev}`;
+    const del = document.createElement("button");
+    del.textContent = "削除";
+    del.onclick = () => {
+      editor.targets.splice(i, 1);
+      editorRenderList();
+      editorRedraw();
+    };
+    li.appendChild(span);
+    li.appendChild(del);
+    ul.appendChild(li);
+  });
+}
+
+function toggleEditor(data) {
+  const div = document.getElementById("editor");
+  if (!div.classList.contains("hidden")) {
+    div.classList.add("hidden");
+    editor = null;
+    return;
+  }
+  editor = {
+    camId: data.camera.id,
+    camLat: data.camera.lat,
+    camLon: data.camera.lon,
+    targets: (data.setup.targets || []).map((t) => ({ ...t })),
+    skyBbox: data.setup.sky_bbox ? [...data.setup.sky_bbox] : null,
+    pending: null,
+  };
+  div.classList.remove("hidden");
+  show("editor-form", false);
+  const img = document.getElementById("editor-img");
+  img.onload = () => {
+    editorRedraw();
+    editorRenderList();
+  };
+  img.src = `/api/cameras/${editor.camId}/image/reference?t=${Date.now()}`;
+}
+
+function initEditorEvents() {
+  const canvas = document.getElementById("editor-canvas");
+  let dragStart = null;
+
+  const toNatural = (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const { sx, sy } = editorScale();
+    return [
+      Math.max(0, Math.round((ev.clientX - rect.left) / sx)),
+      Math.max(0, Math.round((ev.clientY - rect.top) / sy)),
+    ];
+  };
+
+  canvas.addEventListener("pointerdown", (ev) => {
+    if (!editor) return;
+    canvas.setPointerCapture(ev.pointerId);
+    dragStart = toNatural(ev);
+  });
+  canvas.addEventListener("pointermove", (ev) => {
+    if (!editor || !dragStart) return;
+    const [x, y] = toNatural(ev);
+    editor.pending = [
+      Math.min(dragStart[0], x),
+      Math.min(dragStart[1], y),
+      Math.abs(x - dragStart[0]),
+      Math.abs(y - dragStart[1]),
+    ];
+    editorRedraw();
+  });
+  canvas.addEventListener("pointerup", () => {
+    if (!editor || !dragStart) return;
+    dragStart = null;
+    if (editor.pending && editor.pending[2] >= 6 && editor.pending[3] >= 6) {
+      show("editor-form", true);
+    } else {
+      editor.pending = null;
+      editorRedraw();
+    }
+  });
+  window.addEventListener("resize", editorRedraw);
+
+  document.getElementById("ef-calc").addEventListener("click", () => {
+    const lat = parseFloat(document.getElementById("ef-lat").value);
+    const lon = parseFloat(document.getElementById("ef-lon").value);
+    if (!editor || isNaN(lat) || isNaN(lon)) return;
+    const d = haversineKm(editor.camLat, editor.camLon, lat, lon);
+    document.getElementById("ef-dist").value = d.toFixed(1);
+  });
+
+  document.getElementById("ef-add").addEventListener("click", () => {
+    if (!editor || !editor.pending) return;
+    const name = document.getElementById("ef-name").value.trim();
+    const dist = parseFloat(document.getElementById("ef-dist").value);
+    const elevRaw = document.getElementById("ef-elev").value;
+    if (!name || isNaN(dist) || dist <= 0) {
+      alert("名前と距離 (km) を入力してください。");
+      return;
+    }
+    const t = { name, distance_km: dist, bbox: editor.pending };
+    if (elevRaw !== "") t.elevation_ft_msl = parseFloat(elevRaw);
+    editor.targets.push(t);
+    editor.pending = null;
+    ["ef-name", "ef-dist", "ef-elev", "ef-lat", "ef-lon"].forEach(
+      (id) => (document.getElementById(id).value = "")
+    );
+    show("editor-form", false);
+    editorRenderList();
+    editorRedraw();
+  });
+
+  document.getElementById("ef-sky").addEventListener("click", () => {
+    if (!editor || !editor.pending) return;
+    editor.skyBbox = editor.pending;
+    editor.pending = null;
+    show("editor-form", false);
+    editorRedraw();
+  });
+
+  document.getElementById("ef-cancel").addEventListener("click", () => {
+    if (!editor) return;
+    editor.pending = null;
+    show("editor-form", false);
+    editorRedraw();
+  });
+
+  document.getElementById("ef-save").addEventListener("click", async () => {
+    if (!editor) return;
+    const camId = editor.camId;
+    const res = await fetch(`/api/cameras/${camId}/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targets: editor.targets, sky_bbox: editor.skyBbox }),
+    });
+    if (res.ok) {
+      alert("保存しました。推定を更新します。");
+      editor = null;
+      document.getElementById("editor").classList.add("hidden");
+      openPanel(camId);
+      loadCameras();
+    } else {
+      alert("保存に失敗しました: " + (await res.text()));
+    }
+  });
+}
+
+initEditorEvents();
 
 document.getElementById("panel-close").addEventListener("click", () => {
   document.getElementById("panel").classList.add("hidden");

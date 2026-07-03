@@ -10,9 +10,10 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from . import analysis, sources
-from .config import CameraConfig, ROOT, load_cameras
+from .config import CameraConfig, ROOT, load_cameras, save_camera_setup
 
 app = FastAPI(title="HeliWX", description="ヘリコプター運航向け 視程・シーリング推定")
 
@@ -114,6 +115,18 @@ def camera_estimate(cam_id: str) -> dict:
         "has_reference": sources.reference_image(cam) is not None,
         "last_error": sources.last_error(cam_id),
         "estimate": asdict(est) if est is not None else None,
+        "setup": {
+            "targets": [
+                {
+                    "name": t.name,
+                    "distance_km": t.distance_km,
+                    "bbox": list(t.bbox),
+                    "elevation_ft_msl": t.elevation_ft_msl,
+                }
+                for t in cam.targets
+            ],
+            "sky_bbox": list(cam.sky_bbox) if cam.sky_bbox else None,
+        },
     }
 
 
@@ -135,6 +148,43 @@ def camera_image(cam_id: str, kind: str) -> Response:
         media_type="image/jpeg",
         headers={"Cache-Control": "no-store"},
     )
+
+
+class TargetIn(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    distance_km: float = Field(gt=0, le=500)
+    bbox: list[int] = Field(min_length=4, max_length=4)
+    elevation_ft_msl: Optional[float] = Field(default=None, ge=-100, le=30000)
+
+
+class SetupIn(BaseModel):
+    targets: list[TargetIn] = Field(max_length=30)
+    sky_bbox: Optional[list[int]] = Field(default=None, min_length=4, max_length=4)
+
+
+def _validate_bbox(bbox: list[int], label: str) -> None:
+    x, y, w, h = bbox
+    if x < 0 or y < 0 or w < 4 or h < 4:
+        raise HTTPException(422, f"{label} の bbox が不正です: {bbox}")
+
+
+@app.post("/api/cameras/{cam_id}/setup")
+def save_setup(cam_id: str, setup: SetupIn) -> dict:
+    """ターゲットと空領域の設定を保存する (ブラウザ上のエディタから使用)。"""
+    cam = cameras.get(cam_id)
+    if cam is None:
+        raise HTTPException(404, f"カメラ {cam_id} は存在しません")
+    for t in setup.targets:
+        _validate_bbox(t.bbox, t.name)
+    if setup.sky_bbox:
+        _validate_bbox(setup.sky_bbox, "空領域")
+    targets = [t.model_dump(exclude_none=True) for t in setup.targets]
+    try:
+        updated = save_camera_setup(cam_id, targets, setup.sky_bbox)
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+    cameras[cam_id] = updated
+    return {"saved": True, "targets": len(targets), "status": _status(updated)}
 
 
 @app.post("/api/cameras/{cam_id}/capture_reference")
