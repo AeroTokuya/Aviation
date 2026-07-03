@@ -172,8 +172,11 @@ function openFacility(f) {
   if (p.class) rows.push(['種別', p.class]);
   if (p.kind) rows.push(['種別', p.kind]);
   if (p.muni) rows.push(['所在', p.muni]);
-  if (p.freq != null) rows.push(['周波数', p.freq + ' MHz']);
+  if (p.freq != null) rows.push(['周波数', String(p.freq)]);
   else if (p.type === 'navaid') rows.push(['周波数', '要 AIP 照合']);
+  if (p.ch) rows.push(['CH', p.ch]);
+  if (p.apt) rows.push(['関連空港', p.apt]);
+  if (p.power) rows.push(['出力', p.power]);
   if (p.freqs) {
     const fl = Object.entries(p.freqs).map(([k, v]) => `${k} ${v}`).join(' / ');
     rows.push(['通信', fl]);
