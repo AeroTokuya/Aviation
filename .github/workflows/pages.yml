@@ -1,5 +1,9 @@
 name: Deploy HeliNav to GitHub Pages
 
+# webapp/ を gh-pages ブランチに公開する (Pages のデプロイ専用ブランチ)。
+# gh-pages ブランチが作られると GitHub Pages が自動的に有効になり、
+# https://aerotokuya.github.io/Aviation/ で配信される。
+
 on:
   push:
     branches:
@@ -9,9 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
@@ -20,20 +22,13 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Publish webapp/ to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          enablement: true
-      - name: Upload webapp
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: webapp
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./webapp
+          force_orphan: true
+          commit_message: "Deploy HeliNav (webapp/) to GitHub Pages"
