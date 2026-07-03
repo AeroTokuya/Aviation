@@ -1,0 +1,280 @@
+{
+  "cameras": [
+    {
+      "id": "tokyo-heliport-west",
+      "name": "東京ヘリポート 西向きカメラ",
+      "lat": 35.6367,
+      "lon": 139.8395,
+      "heading_deg": 270,
+      "fov_deg": 60,
+      "elevation_ft": 20,
+      "description": "新木場・東京ヘリポートから都心〜富士山方向。デモ気象: 快晴。",
+      "reference_image": "data/reference/tokyo-heliport-west.jpg",
+      "source": {
+        "type": "local",
+        "path": "data/current/tokyo-heliport-west.jpg"
+      },
+      "sky_bbox": [
+        10,
+        6,
+        780,
+        219
+      ],
+      "targets": [
+        {
+          "name": "富士山",
+          "distance_km": 95,
+          "bbox": [
+            80,
+            233,
+            140,
+            87
+          ],
+          "elevation_ft_msl": 12388
+        },
+        {
+          "name": "丹沢山地",
+          "distance_km": 55,
+          "bbox": [
+            310,
+            270,
+            180,
+            50
+          ],
+          "elevation_ft_msl": 4100
+        },
+        {
+          "name": "新宿ビル群",
+          "distance_km": 12,
+          "bbox": [
+            545,
+            275,
+            110,
+            45
+          ],
+          "elevation_ft_msl": 820
+        },
+        {
+          "name": "運河対岸クレーン",
+          "distance_km": 2,
+          "bbox": [
+            708,
+            236,
+            44,
+            84
+          ]
+        }
+      ]
+    },
+    {
+      "id": "yokohama-mm-southwest",
+      "name": "横浜みなとみらい 南西向きカメラ",
+      "lat": 35.4553,
+      "lon": 139.635,
+      "heading_deg": 225,
+      "fov_deg": 60,
+      "elevation_ft": 100,
+      "description": "みなとみらいから大山・富士山方向。デモ気象: 靄 (視程約6km)。",
+      "reference_image": "data/reference/yokohama-mm-southwest.jpg",
+      "source": {
+        "type": "local",
+        "path": "data/current/yokohama-mm-southwest.jpg"
+      },
+      "sky_bbox": [
+        10,
+        6,
+        780,
+        105
+      ],
+      "targets": [
+        {
+          "name": "富士山",
+          "distance_km": 80,
+          "bbox": [
+            65,
+            217,
+            130,
+            103
+          ],
+          "elevation_ft_msl": 12388
+        },
+        {
+          "name": "大山",
+          "distance_km": 40,
+          "bbox": [
+            275,
+            253,
+            150,
+            67
+          ],
+          "elevation_ft_msl": 4100
+        },
+        {
+          "name": "ベイブリッジ主塔",
+          "distance_km": 4,
+          "bbox": [
+            530,
+            235,
+            60,
+            85
+          ],
+          "elevation_ft_msl": 610
+        },
+        {
+          "name": "港湾クレーン",
+          "distance_km": 1,
+          "bbox": [
+            674,
+            119,
+            52,
+            201
+          ]
+        }
+      ]
+    },
+    {
+      "id": "kawasaki-coast-east",
+      "name": "川崎臨海部 東向きカメラ",
+      "lat": 35.5065,
+      "lon": 139.753,
+      "heading_deg": 90,
+      "fov_deg": 60,
+      "elevation_ft": 30,
+      "description": "川崎臨海部から東京湾方向。デモ気象: 濃霧 (視程約1.2km)。",
+      "reference_image": "data/reference/kawasaki-coast-east.jpg",
+      "source": {
+        "type": "local",
+        "path": "data/current/kawasaki-coast-east.jpg"
+      },
+      "sky_bbox": [
+        10,
+        6,
+        780,
+        40
+      ],
+      "targets": [
+        {
+          "name": "風の塔",
+          "distance_km": 10,
+          "bbox": [
+            140,
+            300,
+            60,
+            20
+          ],
+          "elevation_ft_msl": 330
+        },
+        {
+          "name": "製鉄所クレーン群",
+          "distance_km": 3,
+          "bbox": [
+            310,
+            231,
+            140,
+            89
+          ],
+          "elevation_ft_msl": 430
+        },
+        {
+          "name": "プラント煙突",
+          "distance_km": 1.5,
+          "bbox": [
+            576,
+            31,
+            48,
+            289
+          ],
+          "elevation_ft_msl": 680
+        },
+        {
+          "name": "隣接倉庫",
+          "distance_km": 0.4,
+          "bbox": [
+            692,
+            153,
+            96,
+            167
+          ]
+        }
+      ]
+    },
+    {
+      "id": "atsugi-north",
+      "name": "厚木 北西向きカメラ",
+      "lat": 35.452,
+      "lon": 139.36,
+      "heading_deg": 315,
+      "fov_deg": 60,
+      "elevation_ft": 200,
+      "description": "厚木から丹沢・富士山方向。デモ気象: 曇天・雲底約2,600ft AGL。",
+      "reference_image": "data/reference/atsugi-north.jpg",
+      "source": {
+        "type": "local",
+        "path": "data/current/atsugi-north.jpg"
+      },
+      "sky_bbox": [
+        10,
+        6,
+        780,
+        116
+      ],
+      "targets": [
+        {
+          "name": "富士山",
+          "distance_km": 45,
+          "bbox": [
+            98,
+            139,
+            85,
+            63
+          ],
+          "elevation_ft_msl": 12388
+        },
+        {
+          "name": "大山",
+          "distance_km": 18,
+          "bbox": [
+            318,
+            175,
+            85,
+            50
+          ],
+          "elevation_ft_msl": 4100
+        },
+        {
+          "name": "送電鉄塔 (尾根上)",
+          "distance_km": 6,
+          "bbox": [
+            533,
+            130,
+            24,
+            66
+          ],
+          "elevation_ft_msl": 1900
+        },
+        {
+          "name": "丘陵地",
+          "distance_km": 8,
+          "bbox": [
+            570,
+            257,
+            140,
+            63
+          ],
+          "elevation_ft_msl": 950
+        },
+        {
+          "name": "市街ビル",
+          "distance_km": 3,
+          "bbox": [
+            705,
+            264,
+            80,
+            56
+          ],
+          "elevation_ft_msl": 450
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HeliWX — ライブカメラ視程・シーリング推定</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='13' font-size='13'%3E🚁%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="topbar">
+    <h1>HeliWX <span class="sub">ライブカメラ視程・シーリング推定</span></h1>
+    <div id="disclaimer">参考情報 — 公式気象情報 (METAR/TAF 等) と併用し、最終判断は操縦士が行ってください</div>
+  </header>
+
+  <div id="main">
+    <div id="map"></div>
+
+    <aside id="panel" class="hidden">
+      <button id="panel-close" title="閉じる">&times;</button>
+      <h2 id="cam-name">—</h2>
+      <p id="cam-desc" class="muted"></p>
+
+      <div id="category-badge" class="badge">—</div>
+
+      <div id="metrics">
+        <div class="metric">
+          <div class="metric-label">推定視程</div>
+          <div class="metric-value" id="m-vis">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">推定シーリング</div>
+          <div class="metric-value" id="m-ceil">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">雲量</div>
+          <div class="metric-value" id="m-cover">—</div>
+        </div>
+      </div>
+
+      <div class="img-block">
+        <div class="img-title">現在の画像 <span id="img-time" class="muted"></span></div>
+        <img id="img-current" alt="現在のカメラ画像">
+      </div>
+      <div class="img-block">
+        <div class="img-title">晴天時の基準画像</div>
+        <img id="img-reference" alt="晴天時の基準画像">
+      </div>
+
+      <h3>ターゲット別の視認状況</h3>
+      <table id="targets-table">
+        <thead>
+          <tr><th>ターゲット</th><th>距離</th><th>標高</th><th>視認</th><th>推定視程</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <ul id="notes" class="muted"></ul>
+
+      <button id="refresh">再解析</button>
+    </aside>
+  </div>
+
+  <div id="legend">
+    <div><span class="dot vfr"></span>VFR</div>
+    <div><span class="dot mvfr"></span>MVFR</div>
+    <div><span class="dot ifr"></span>IFR</div>
+    <div><span class="dot lifr"></span>LIFR</div>
+    <div><span class="dot unknown"></span>不明</div>
+  </div>
+
+  <script src="vendor/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
