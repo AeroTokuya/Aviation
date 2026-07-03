@@ -175,7 +175,8 @@ class TestDemoEndToEnd:
     def estimates(self):
         cams = load_cameras()
         out = {}
-        for cid, cam in cams.items():
+        for cid in DEMO_TRUTH:
+            cam = cams[cid]
             ref = sources.reference_image(cam)
             cur = sources.current_image(cam)
             assert ref is not None and cur is not None

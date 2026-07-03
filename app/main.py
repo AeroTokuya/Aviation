@@ -6,31 +6,68 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import analysis, sources
-from .config import ROOT, load_cameras
+from .config import CameraConfig, ROOT, load_cameras
 
 app = FastAPI(title="HeliWX", description="ヘリコプター運航向け 視程・シーリング推定")
 
 cameras = load_cameras()
 
 
-def _analyze(cam_id: str) -> analysis.Estimate:
-    cam = cameras.get(cam_id)
-    if cam is None:
-        raise HTTPException(404, f"カメラ {cam_id} は存在しません")
+def _status(cam: CameraConfig) -> str:
+    """カメラの動作状態を返す。
+
+    estimate        … 推定可能 (基準画像 + ターゲットあり)
+    needs_targets   … 画像はあるがターゲット未設定 → 画像比較のみ
+    needs_reference … 晴天時基準画像が未取得 → 現在画像のみ
+    view            … YouTube 等の映像視聴のみ
+    page            … 提供元ページへのリンクのみ
+    """
+    if cam.source_type == "youtube":
+        return "view"
+    if cam.source_type == "page":
+        return "page"
+    if sources.reference_image(cam) is None:
+        return "needs_reference"
+    if not cam.targets:
+        return "needs_targets"
+    return "estimate"
+
+
+def _try_analyze(cam: CameraConfig) -> Optional[analysis.Estimate]:
+    """推定可能なカメラなら推定を実行。不可能/失敗なら None。"""
+    if _status(cam) != "estimate":
+        return None
     ref = sources.reference_image(cam)
     cur = sources.current_image(cam)
-    if ref is None:
-        raise HTTPException(500, "基準画像を読み込めません")
-    if cur is None:
-        raise HTTPException(502, "現在画像を取得できません")
+    if ref is None or cur is None:
+        return None
     return analysis.analyze(
         ref, cur, cam.targets, camera_elevation_ft=cam.elevation_ft, sky_bbox=cam.sky_bbox
     )
+
+
+def _camera_info(cam: CameraConfig) -> dict:
+    return {
+        "id": cam.id,
+        "name": cam.name,
+        "lat": cam.lat,
+        "lon": cam.lon,
+        "heading_deg": cam.heading_deg,
+        "fov_deg": cam.fov_deg,
+        "elevation_ft": cam.elevation_ft,
+        "description": cam.description,
+        "source_type": cam.source_type,
+        "youtube_video_id": cam.source if cam.source_type == "youtube" else "",
+        "youtube_channel_id": cam.youtube_channel_id,
+        "attribution": cam.attribution,
+        "page_url": cam.page_url,
+    }
 
 
 @app.get("/api/cameras")
@@ -38,17 +75,15 @@ def list_cameras() -> list[dict]:
     """全カメラの位置・方角と最新推定サマリ (地図アイコン用)。"""
     out = []
     for cam in cameras.values():
-        item = {
-            "id": cam.id,
-            "name": cam.name,
-            "lat": cam.lat,
-            "lon": cam.lon,
-            "heading_deg": cam.heading_deg,
-            "fov_deg": cam.fov_deg,
-            "description": cam.description,
-        }
+        item = _camera_info(cam)
+        item["status"] = _status(cam)
+        item["summary"] = None
         try:
-            est = _analyze(cam.id)
+            est = _try_analyze(cam)
+        except Exception:
+            est = None
+            item["status"] = "error"
+        if est is not None:
             item["summary"] = {
                 "visibility_km": est.visibility_km,
                 "visibility_is_lower_bound": est.visibility_is_lower_bound,
@@ -56,8 +91,6 @@ def list_cameras() -> list[dict]:
                 "ceiling_is_unlimited": est.ceiling_is_unlimited,
                 "flight_category": est.flight_category,
             }
-        except HTTPException:
-            item["summary"] = None
         out.append(item)
     return out
 
@@ -67,19 +100,18 @@ def camera_estimate(cam_id: str) -> dict:
     cam = cameras.get(cam_id)
     if cam is None:
         raise HTTPException(404, f"カメラ {cam_id} は存在しません")
-    est = _analyze(cam_id)
+    status = _status(cam)
+    est = None
+    if status == "estimate":
+        try:
+            est = _try_analyze(cam)
+        except Exception:
+            status = "error"
     return {
-        "camera": {
-            "id": cam.id,
-            "name": cam.name,
-            "lat": cam.lat,
-            "lon": cam.lon,
-            "heading_deg": cam.heading_deg,
-            "fov_deg": cam.fov_deg,
-            "elevation_ft": cam.elevation_ft,
-            "description": cam.description,
-        },
-        "estimate": asdict(est),
+        "camera": _camera_info(cam),
+        "status": status,
+        "has_reference": sources.reference_image(cam) is not None,
+        "estimate": asdict(est) if est is not None else None,
     }
 
 
@@ -101,6 +133,24 @@ def camera_image(cam_id: str, kind: str) -> Response:
         media_type="image/jpeg",
         headers={"Cache-Control": "no-store"},
     )
+
+
+@app.post("/api/cameras/{cam_id}/capture_reference")
+def capture_reference(cam_id: str) -> dict:
+    """現在の画像を晴天時の基準画像として保存する (url カメラの初期設定用)。
+
+    快晴で遠方までよく見える日に実行すること。
+    """
+    cam = cameras.get(cam_id)
+    if cam is None:
+        raise HTTPException(404, f"カメラ {cam_id} は存在しません")
+    if cam.source_type != "url":
+        raise HTTPException(400, "基準画像の取得は url 型カメラのみ対応です")
+    img = sources.current_image(cam)
+    if img is None:
+        raise HTTPException(502, "現在画像を取得できません")
+    path = sources.save_reference(cam, img)
+    return {"saved": path}
 
 
 app.mount("/", StaticFiles(directory=ROOT / "static", html=True), name="static")

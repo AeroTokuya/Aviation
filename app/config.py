@@ -22,15 +22,38 @@ class CameraConfig:
     heading_deg: float  # 撮影方位 (真北基準・時計回り)
     fov_deg: float  # 水平画角
     elevation_ft: float  # カメラ設置標高 (MSL)
-    reference_image: str  # 晴天時基準画像のパス (リポジトリ相対)
-    source_type: str  # "local" | "url"
-    source: str  # ローカルパス or ライブカメラ画像 URL
+    # ソース種別:
+    #   local   … リポジトリ内の画像ファイル (デモ用)
+    #   url     … 静止画を直接取得できるライブカメラ URL → 視程・シーリング推定可
+    #   youtube … YouTube ライブ配信 (視聴のみ、推定なし)
+    #   page    … 提供元ページへのリンクのみ (視聴のみ、推定なし)
+    source_type: str
+    source: str  # local: パス / url: 画像URL / youtube: video_id / page: ページURL
+    youtube_channel_id: str = ""  # youtube で channel 埋め込みを使う場合
+    reference_image: str = ""  # 晴天時基準画像のパス (image 系のみ)
     targets: list[Target] = field(default_factory=list)
     sky_bbox: Optional[tuple[int, int, int, int]] = None
     description: str = ""
+    attribution: str = ""  # 映像提供元の表記
+    page_url: str = ""  # 提供元ページ (出典リンク)
+
+    @property
+    def is_image_source(self) -> bool:
+        return self.source_type in ("local", "url")
 
     @staticmethod
     def from_dict(d: dict) -> "CameraConfig":
+        src = d["source"]
+        stype = src["type"]
+        source = (
+            src.get("path")
+            or src.get("url")
+            or src.get("video_id")
+            or ""
+        )
+        ref = d.get("reference_image", "")
+        if not ref and stype in ("local", "url"):
+            ref = f"data/reference/{d['id']}.jpg"
         return CameraConfig(
             id=d["id"],
             name=d["name"],
@@ -39,14 +62,17 @@ class CameraConfig:
             heading_deg=float(d["heading_deg"]),
             fov_deg=float(d.get("fov_deg", 60)),
             elevation_ft=float(d.get("elevation_ft", 0)),
-            reference_image=d["reference_image"],
-            source_type=d["source"]["type"],
-            source=d["source"].get("path") or d["source"].get("url") or "",
+            source_type=stype,
+            source=source,
+            youtube_channel_id=src.get("channel_id", ""),
+            reference_image=ref,
             targets=[Target.from_dict(t) for t in d.get("targets", [])],
             sky_bbox=(
                 tuple(int(v) for v in d["sky_bbox"]) if d.get("sky_bbox") else None
             ),
             description=d.get("description", ""),
+            attribution=d.get("attribution", ""),
+            page_url=d.get("page_url", ""),
         )
 
 

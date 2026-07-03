@@ -21,8 +21,13 @@
       <button id="panel-close" title="閉じる">&times;</button>
       <h2 id="cam-name">—</h2>
       <p id="cam-desc" class="muted"></p>
+      <p id="attribution" class="muted"></p>
 
       <div id="category-badge" class="badge">—</div>
+
+      <div id="video-embed" class="hidden"></div>
+      <button id="open-page" class="hidden action-btn">提供元ページで映像を見る</button>
+      <p id="setup-hint" class="hint"></p>
 
       <div id="metrics">
         <div class="metric">
@@ -39,24 +44,26 @@
         </div>
       </div>
 
-      <div class="img-block">
+      <div class="img-block" id="img-current-block">
         <div class="img-title">現在の画像 <span id="img-time" class="muted"></span></div>
         <img id="img-current" alt="現在のカメラ画像">
       </div>
-      <div class="img-block">
+      <div class="img-block" id="img-reference-block">
         <div class="img-title">晴天時の基準画像</div>
         <img id="img-reference" alt="晴天時の基準画像">
       </div>
+      <button id="capture-reference" class="hidden action-btn">現在の画像を晴天時基準画像として保存</button>
 
-      <h3>ターゲット別の視認状況</h3>
-      <table id="targets-table">
-        <thead>
-          <tr><th>ターゲット</th><th>距離</th><th>標高</th><th>視認</th><th>推定視程</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-
-      <ul id="notes" class="muted"></ul>
+      <div id="targets-section">
+        <h3>ターゲット別の視認状況</h3>
+        <table id="targets-table">
+          <thead>
+            <tr><th>ターゲット</th><th>距離</th><th>標高</th><th>視認</th><th>推定視程</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <ul id="notes" class="muted"></ul>
+      </div>
 
       <button id="refresh">再解析</button>
     </aside>
@@ -68,6 +75,7 @@
     <div><span class="dot ifr"></span>IFR</div>
     <div><span class="dot lifr"></span>LIFR</div>
     <div><span class="dot unknown"></span>不明</div>
+    <div><span class="dot view"></span>映像のみ</div>
   </div>
 
   <script src="vendor/leaflet.js"></script>

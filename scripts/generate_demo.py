@@ -369,7 +369,15 @@ def main() -> None:
     ref_dir.mkdir(parents=True, exist_ok=True)
     cur_dir.mkdir(parents=True, exist_ok=True)
 
-    config = {"cameras": []}
+    # 既存設定を読み込み、デモカメラのみ差し替える (手動登録した実カメラは保持)
+    cfg_path = ROOT / "config" / "cameras.json"
+    existing: list[dict] = []
+    if cfg_path.exists():
+        with open(cfg_path, encoding="utf-8") as f:
+            existing = json.load(f).get("cameras", [])
+    demo_ids = {spec.id for spec in CAMERAS}
+    config = {"cameras": [c for c in existing if c["id"] not in demo_ids]}
+
     for i, spec in enumerate(CAMERAS):
         ref = render(spec, spec.reference_weather, seed=1000 + i)
         cur = render(spec, spec.current_weather, seed=1000 + i)  # 同一シード=同一シーン
@@ -390,7 +398,7 @@ def main() -> None:
         config["cameras"].append(
             {
                 "id": spec.id,
-                "name": spec.name,
+                "name": f"【デモ】{spec.name}",
                 "lat": spec.lat,
                 "lon": spec.lon,
                 "heading_deg": spec.heading_deg,
@@ -405,11 +413,10 @@ def main() -> None:
         )
         print(f"generated: {spec.id} (現況視程 {spec.current_weather.visibility_km}km)")
 
-    cfg_dir = ROOT / "config"
-    cfg_dir.mkdir(exist_ok=True)
-    with open(cfg_dir / "cameras.json", "w", encoding="utf-8") as f:
+    cfg_path.parent.mkdir(exist_ok=True)
+    with open(cfg_path, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
-    print(f"wrote: {cfg_dir / 'cameras.json'}")
+    print(f"wrote: {cfg_path}")
 
 
 if __name__ == "__main__":

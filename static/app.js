@@ -8,6 +8,17 @@ const CATEGORY_COLORS = {
   UNKNOWN: "#888888",
 };
 
+// 推定なし (映像視聴のみ / 設定未完了) のアイコン色
+const VIEW_COLOR = "#546686";
+
+const STATUS_LABELS = {
+  view: "ライブ映像 (推定なし)",
+  page: "提供元ページで映像確認",
+  needs_reference: "基準画像 未取得",
+  needs_targets: "画像比較のみ (ターゲット未設定)",
+  error: "画像取得エラー",
+};
+
 const AUTO_REFRESH_MS = 60_000;
 
 const map = L.map("map");
@@ -66,18 +77,23 @@ async function loadCameras() {
   const cams = await res.json();
   const bounds = [];
   for (const cam of cams) {
-    const cat = cam.summary ? cam.summary.flight_category : "UNKNOWN";
-    const color = CATEGORY_COLORS[cat] || CATEGORY_COLORS.UNKNOWN;
+    let color;
+    if (cam.summary) {
+      color = CATEGORY_COLORS[cam.summary.flight_category] || CATEGORY_COLORS.UNKNOWN;
+    } else {
+      color = cam.status === "error" ? CATEGORY_COLORS.UNKNOWN : VIEW_COLOR;
+    }
     const icon = cameraIcon(cam.heading_deg, cam.fov_deg, color);
+    const tooltip = cam.summary
+      ? `${cam.name}<br>視程 ${fmtVisibility(cam.summary)} / シーリング ${fmtCeiling(cam.summary)}`
+      : `${cam.name}<br>${STATUS_LABELS[cam.status] || ""}`;
     if (markers[cam.id]) {
       markers[cam.id].setIcon(icon);
+      markers[cam.id].setTooltipContent(tooltip);
     } else {
       const m = L.marker([cam.lat, cam.lon], { icon, title: cam.name });
       m.on("click", () => openPanel(cam.id));
-      m.bindTooltip(
-        `${cam.name}<br>視程 ${fmtVisibility(cam.summary)} / シーリング ${fmtCeiling(cam.summary)}`,
-        { direction: "top", offset: [0, -14] }
-      );
+      m.bindTooltip(tooltip, { direction: "top", offset: [0, -14] });
       m.addTo(map);
       markers[cam.id] = m;
     }
@@ -87,6 +103,10 @@ async function loadCameras() {
     map.fitBounds(bounds, { padding: [70, 70] });
     map._loadedOnce = true;
   }
+}
+
+function show(id, visible) {
+  document.getElementById(id).classList.toggle("hidden", !visible);
 }
 
 async function openPanel(camId) {
@@ -102,51 +122,136 @@ async function openPanel(camId) {
   }
   const data = await res.json();
   if (selectedCameraId !== camId) return; // 別カメラに切替済み
+  const cam = data.camera;
   const est = data.estimate;
+  const status = data.status;
+  const isImage = cam.source_type === "url" || cam.source_type === "local";
 
-  document.getElementById("cam-name").textContent = data.camera.name;
+  document.getElementById("cam-name").textContent = cam.name;
   document.getElementById("cam-desc").textContent =
-    `${data.camera.description} (方位 ${Math.round(data.camera.heading_deg)}°, 画角 ${Math.round(data.camera.fov_deg)}°, 標高 ${Math.round(data.camera.elevation_ft)} ft)`;
+    `${cam.description} (方位 ${Math.round(cam.heading_deg)}°, 画角 ${Math.round(cam.fov_deg)}°)`;
 
-  const badge = document.getElementById("category-badge");
-  badge.textContent = est.flight_category;
-  badge.className = "badge " + est.flight_category.toLowerCase();
-
-  document.getElementById("m-vis").textContent = fmtVisibility({
-    visibility_km: est.visibility_km,
-    visibility_is_lower_bound: est.visibility_is_lower_bound,
-  });
-  document.getElementById("m-ceil").textContent = fmtCeiling({
-    ceiling_is_unlimited: est.ceiling_is_unlimited,
-    ceiling_ft_agl: est.ceiling_ft_agl,
-  });
-  document.getElementById("m-cover").textContent = est.cloud_cover_label
-    ? `${est.cloud_cover_label} (${est.cloud_cover_oktas}/8)`
-    : "—";
-
-  const ts = Date.now();
-  document.getElementById("img-current").src = `/api/cameras/${camId}/image/current?t=${ts}`;
-  document.getElementById("img-reference").src = `/api/cameras/${camId}/image/reference?t=${ts}`;
-  document.getElementById("img-time").textContent = new Date().toLocaleTimeString("ja-JP");
-
-  const tbody = document.querySelector("#targets-table tbody");
-  tbody.innerHTML = "";
-  for (const t of est.targets) {
-    const tr = document.createElement("tr");
-    const elev = t.elevation_ft_msl != null ? `${Math.round(t.elevation_ft_msl).toLocaleString()} ft` : "—";
-    const estV = t.visibility_estimate_km != null ? `${t.visibility_estimate_km} km` : "—";
-    tr.innerHTML =
-      `<td>${t.name}</td><td>${t.distance_km} km</td><td>${elev}</td>` +
-      `<td class="${t.visible ? "vis-ok" : "vis-ng"}">${t.visible ? "○" : "×"}</td><td>${estV}</td>`;
-    tbody.appendChild(tr);
+  // 提供元の表記とリンク
+  const attr = document.getElementById("attribution");
+  attr.innerHTML = "";
+  if (cam.attribution || cam.page_url) {
+    const label = document.createTextNode("映像提供: ");
+    attr.appendChild(label);
+    if (cam.page_url) {
+      const a = document.createElement("a");
+      a.href = cam.page_url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = cam.attribution || cam.page_url;
+      attr.appendChild(a);
+    } else {
+      attr.appendChild(document.createTextNode(cam.attribution));
+    }
   }
 
-  const notes = document.getElementById("notes");
-  notes.innerHTML = "";
-  for (const n of est.notes) {
-    const li = document.createElement("li");
-    li.textContent = n;
-    notes.appendChild(li);
+  // ステータスバッジ
+  const badge = document.getElementById("category-badge");
+  if (est) {
+    badge.textContent = est.flight_category;
+    badge.className = "badge " + est.flight_category.toLowerCase();
+  } else {
+    badge.textContent = STATUS_LABELS[status] || status;
+    badge.className = "badge neutral";
+  }
+
+  // 数値メトリクス (推定ありのときのみ)
+  show("metrics", !!est);
+  if (est) {
+    document.getElementById("m-vis").textContent = fmtVisibility({
+      visibility_km: est.visibility_km,
+      visibility_is_lower_bound: est.visibility_is_lower_bound,
+    });
+    document.getElementById("m-ceil").textContent = fmtCeiling({
+      ceiling_is_unlimited: est.ceiling_is_unlimited,
+      ceiling_ft_agl: est.ceiling_ft_agl,
+    });
+    document.getElementById("m-cover").textContent = est.cloud_cover_label
+      ? `${est.cloud_cover_label} (${est.cloud_cover_oktas}/8)`
+      : "—";
+  }
+
+  // YouTube ライブ埋め込み
+  const video = document.getElementById("video-embed");
+  video.innerHTML = "";
+  if (cam.source_type === "youtube") {
+    const src = cam.youtube_channel_id
+      ? `https://www.youtube.com/embed/live_stream?channel=${cam.youtube_channel_id}&autoplay=1&mute=1`
+      : `https://www.youtube.com/embed/${cam.youtube_video_id}?autoplay=1&mute=1`;
+    const iframe = document.createElement("iframe");
+    iframe.src = src;
+    iframe.allow = "autoplay; encrypted-media; picture-in-picture";
+    iframe.allowFullscreen = true;
+    video.appendChild(iframe);
+  }
+  show("video-embed", cam.source_type === "youtube");
+
+  // 提供元ページ型: リンクボタンのみ
+  const pageBtn = document.getElementById("open-page");
+  if (cam.source_type === "page") {
+    pageBtn.onclick = () => window.open(cam.page_url, "_blank", "noopener");
+  }
+  show("open-page", cam.source_type === "page");
+
+  // 画像 (url / local カメラ)
+  show("img-current-block", isImage && status !== "error");
+  show("img-reference-block", isImage && data.has_reference);
+  if (isImage) {
+    const ts = Date.now();
+    document.getElementById("img-current").src = `/api/cameras/${camId}/image/current?t=${ts}`;
+    if (data.has_reference) {
+      document.getElementById("img-reference").src = `/api/cameras/${camId}/image/reference?t=${ts}`;
+    }
+    document.getElementById("img-time").textContent = new Date().toLocaleTimeString("ja-JP");
+  }
+
+  // 基準画像の取得ボタン (url カメラのみ)
+  const capBtn = document.getElementById("capture-reference");
+  show("capture-reference", cam.source_type === "url");
+  capBtn.onclick = async () => {
+    const msg = data.has_reference
+      ? "既存の晴天時基準画像を現在の画像で上書きします。今は快晴で遠方まで見えていますか?"
+      : "現在の画像を晴天時の基準画像として保存します。今は快晴で遠方まで見えていますか?";
+    if (!confirm(msg)) return;
+    const r = await fetch(`/api/cameras/${camId}/capture_reference`, { method: "POST" });
+    alert(r.ok ? "保存しました。" : "保存に失敗しました: " + (await r.text()));
+    openPanel(camId);
+  };
+  if (status === "needs_reference") {
+    document.getElementById("setup-hint").textContent =
+      "晴天時の基準画像が未取得です。快晴の日に下のボタンで取得すると画像比較ができるようになります。距離・標高つきターゲットを config/cameras.json に登録すると視程・シーリング推定が有効になります。";
+  } else if (status === "needs_targets") {
+    document.getElementById("setup-hint").textContent =
+      "基準画像はあります。config/cameras.json にターゲット (距離・標高・bbox) を登録すると視程・シーリング推定が有効になります。";
+  } else {
+    document.getElementById("setup-hint").textContent = "";
+  }
+
+  // ターゲット表・注記 (推定ありのときのみ)
+  show("targets-section", !!est);
+  if (est) {
+    const tbody = document.querySelector("#targets-table tbody");
+    tbody.innerHTML = "";
+    for (const t of est.targets) {
+      const tr = document.createElement("tr");
+      const elev = t.elevation_ft_msl != null ? `${Math.round(t.elevation_ft_msl).toLocaleString()} ft` : "—";
+      const estV = t.visibility_estimate_km != null ? `${t.visibility_estimate_km} km` : "—";
+      tr.innerHTML =
+        `<td>${t.name}</td><td>${t.distance_km} km</td><td>${elev}</td>` +
+        `<td class="${t.visible ? "vis-ok" : "vis-ng"}">${t.visible ? "○" : "×"}</td><td>${estV}</td>`;
+      tbody.appendChild(tr);
+    }
+    const notes = document.getElementById("notes");
+    notes.innerHTML = "";
+    for (const n of est.notes) {
+      const li = document.createElement("li");
+      li.textContent = n;
+      notes.appendChild(li);
+    }
   }
 }
 

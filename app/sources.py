@@ -50,11 +50,27 @@ def fetch_url(url: str) -> Optional[np.ndarray]:
 def current_image(cam: CameraConfig) -> Optional[np.ndarray]:
     if cam.source_type == "url":
         return fetch_url(cam.source)
-    return read_local(cam.source)
+    if cam.source_type == "local":
+        return read_local(cam.source)
+    return None  # youtube / page は画像取得なし
 
 
 def reference_image(cam: CameraConfig) -> Optional[np.ndarray]:
+    if not cam.reference_image:
+        return None
     return read_local(cam.reference_image)
+
+
+def save_reference(cam: CameraConfig, img: np.ndarray) -> str:
+    """現在画像を晴天時基準画像として保存する。"""
+    if not cam.reference_image:
+        raise ValueError("このカメラには基準画像パスが設定されていません")
+    path = (ROOT / cam.reference_image).resolve()
+    if not path.is_relative_to(ROOT):
+        raise ValueError("不正な保存先パスです")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    return cam.reference_image
 
 
 def encode_jpeg(img: np.ndarray) -> bytes:

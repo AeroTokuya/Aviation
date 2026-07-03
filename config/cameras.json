@@ -1,8 +1,121 @@
 {
   "cameras": [
     {
+      "id": "kawaguchiko-fuji",
+      "name": "河口湖 富士山ライブカメラ",
+      "lat": 35.517,
+      "lon": 138.755,
+      "heading_deg": 190,
+      "fov_deg": 55,
+      "elevation_ft": 2730,
+      "description": "河口湖北岸から富士山方向のYouTubeライブ配信。富士山北面と山頂部の雲の付き方を確認できる。",
+      "source": {
+        "type": "youtube",
+        "video_id": "bdUbACCWmoY"
+      },
+      "attribution": "YouTube ライブ配信 (河口湖からの富士山ライブカメラ)",
+      "page_url": "https://www.youtube.com/watch?v=bdUbACCWmoY"
+    },
+    {
+      "id": "gotemba-sbs",
+      "name": "御殿場 情報カメラ (SBS)",
+      "lat": 35.3086,
+      "lon": 138.9349,
+      "heading_deg": 285,
+      "fov_deg": 60,
+      "elevation_ft": 1480,
+      "description": "御殿場市街から富士山東面方向。富士山東側斜面と御殿場口方面の雲底・視程の目視確認に有用。",
+      "source": {
+        "type": "youtube",
+        "video_id": "3ltxADrccf8"
+      },
+      "attribution": "SBS静岡放送 (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=3ltxADrccf8"
+    },
+    {
+      "id": "nihondaira-sbs",
+      "name": "日本平 富士山・清水港カメラ (SBS)",
+      "lat": 34.976,
+      "lon": 138.386,
+      "heading_deg": 35,
+      "fov_deg": 60,
+      "elevation_ft": 980,
+      "description": "日本平山頂から清水港越しに富士山方向。駿河湾沿岸の視程と富士山方面の雲を確認できる。",
+      "source": {
+        "type": "youtube",
+        "video_id": "e5fTf-gywY0"
+      },
+      "attribution": "SBS NEWS6 (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=e5fTf-gywY0"
+    },
+    {
+      "id": "satta-pass",
+      "name": "さった峠 富士山・駿河湾カメラ",
+      "lat": 35.0678,
+      "lon": 138.5225,
+      "heading_deg": 35,
+      "fov_deg": 60,
+      "elevation_ft": 300,
+      "description": "静岡市清水区・さった峠から富士山と駿河湾、国道1号方向。海上視程の目視確認に有用。",
+      "source": {
+        "type": "youtube",
+        "video_id": "GsD9QQEKSzQ"
+      },
+      "attribution": "静岡市 (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=GsD9QQEKSzQ"
+    },
+    {
+      "id": "odaiba-endaiba",
+      "name": "お台場 東京湾ライブカメラ (EN DAIBA)",
+      "lat": 35.628,
+      "lon": 139.777,
+      "heading_deg": 130,
+      "fov_deg": 90,
+      "elevation_ft": 100,
+      "description": "お台場から東京湾・羽田方向。東京湾上の視程と羽田/東京ヘリポート方面の天候確認に有用。チャンネル埋め込みのため配信更新に自動追従。",
+      "source": {
+        "type": "youtube",
+        "video_id": "",
+        "channel_id": "UCMaXtOvzgcCQt7MZwJmr7XA"
+      },
+      "attribution": "EN DAIBA (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/channel/UCMaXtOvzgcCQt7MZwJmr7XA"
+    },
+    {
+      "id": "yokohama-mm-tbs",
+      "name": "横浜みなとみらいライブカメラ (TBS)",
+      "lat": 35.4498,
+      "lon": 139.6424,
+      "heading_deg": 100,
+      "fov_deg": 70,
+      "elevation_ft": 160,
+      "description": "海岸通から大さん橋・ベイブリッジ方向。横浜港周辺の視程・雲底の目視確認に有用。",
+      "source": {
+        "type": "youtube",
+        "video_id": "x3P3N3VGvtU"
+      },
+      "attribution": "TBS NEWS DIG (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=x3P3N3VGvtU"
+    },
+    {
+      "id": "shonan-fujiview",
+      "name": "湘南モノレール 富士ビューカメラ",
+      "lat": 35.3316,
+      "lon": 139.5266,
+      "heading_deg": 270,
+      "fov_deg": 50,
+      "elevation_ft": 120,
+      "description": "湘南深沢付近から富士山方向。相模湾岸から見た富士山・丹沢方面の視程確認に有用 (提供元ページで閲覧)。",
+      "source": {
+        "type": "page",
+        "url": "https://www.shonan-monorail.co.jp/viewcamera/"
+      },
+      "attribution": "湘南モノレール株式会社",
+      "page_url": "https://www.shonan-monorail.co.jp/viewcamera/"
+    },
+    {
       "id": "tokyo-heliport-west",
-      "name": "東京ヘリポート 西向きカメラ",
+      "name": "【デモ】東京ヘリポート 西向きカメラ",
       "lat": 35.6367,
       "lon": 139.8395,
       "heading_deg": 270,
@@ -68,7 +181,7 @@
     },
     {
       "id": "yokohama-mm-southwest",
-      "name": "横浜みなとみらい 南西向きカメラ",
+      "name": "【デモ】横浜みなとみらい 南西向きカメラ",
       "lat": 35.4553,
       "lon": 139.635,
       "heading_deg": 225,
@@ -134,7 +247,7 @@
     },
     {
       "id": "kawasaki-coast-east",
-      "name": "川崎臨海部 東向きカメラ",
+      "name": "【デモ】川崎臨海部 東向きカメラ",
       "lat": 35.5065,
       "lon": 139.753,
       "heading_deg": 90,
@@ -200,7 +313,7 @@
     },
     {
       "id": "atsugi-north",
-      "name": "厚木 北西向きカメラ",
+      "name": "【デモ】厚木 北西向きカメラ",
       "lat": 35.452,
       "lon": 139.36,
       "heading_deg": 315,
