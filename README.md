@@ -78,28 +78,78 @@ BKN 未満の場合はその旨を注記します。
 | IFR (赤) | 1.6–5 km | 500–1,000 ft |
 | LIFR (紫) | < 1.6 km | < 500 ft |
 
-## カメラのソース種別
+## カメラのソース種別 — あらゆる配信パターンに対応
 
-`config/cameras.json` の `source.type` で 4 種類のソースを扱えます:
+公開ライブカメラの配信方式はさまざまですが、`config/cameras.json` の
+`source.type` で以下をすべて扱えます。**フレーム取得可能な形式は
+どれでも視程・シーリング推定に使えます** (基準画像+ターゲット登録後)。
 
-| type | 内容 | 視程・シーリング推定 |
+| type | 対応する配信パターン | フレーム取得(=推定) |
 |---|---|---|
-| `url` | 静止画を直接取得できるライブカメラ画像 URL | **可** (基準画像+ターゲット登録後) |
-| `youtube` | YouTube ライブ配信 (`video_id` または `channel_id`) | 不可 (パネル内で視聴) |
-| `page` | 提供元ページへのリンクのみ | 不可 |
-| `local` | リポジトリ内の画像ファイル (デモ用) | 可 |
+| `url` | 静止画 URL (固定 / 時刻入りファイル名) | **可** |
+| `mjpeg` | Motion JPEG ストリーム (IP カメラの `video.cgi` 等) | **可** |
+| `stream` | HLS (`.m3u8`) / RTSP / MP4 等の動画配信 | **可** |
+| `youtube` | YouTube ライブ (`video_id` / `channel_id`) | **可** (yt-dlp 使用) + パネル内視聴 |
+| `page_image` | HTML ページ内に画像が埋め込まれているサイト | **可** (画像 URL を自動抽出) |
+| `page` | 上記いずれも不可のサイト | 不可 (出典リンク表示のみ) |
+| `local` | リポジトリ内の画像 (デモ用) | 可 |
+
+### 設定例
 
 ```jsonc
-// YouTube ライブ (video_id は配信が再開されると変わることがある。
-// channel_id 指定ならチャンネルの現行ライブに自動追従)
+// 1) 固定 URL の静止画
+{ "source": { "type": "url", "url": "https://example.com/livecam/latest.jpg" } }
+
+// 2) Referer 必須のサーバ (403 が返るときに)
+{ "source": {
+    "type": "url",
+    "url": "https://example.com/cam.jpg",
+    "headers": { "Referer": "https://example.com/livecam/" }
+} }
+
+// 3) ファイル名に時刻が入る静止画 (10 分毎更新・配信 5 分遅れの例)。
+//    {now:...} は JST 現在時刻の strftime。取得失敗時は 1 間隔ずつ自動で遡る
+{ "source": {
+    "type": "url",
+    "url": "https://example.com/cam/img_{now:%Y%m%d%H%M}.jpg",
+    "time_floor_min": 10,
+    "time_offset_min": 5
+} }
+
+// 4) MJPEG ストリーム
+{ "source": { "type": "mjpeg", "url": "http://camera.example/video.cgi" } }
+
+// 5) HLS / RTSP / MP4 動画
+{ "source": { "type": "stream", "url": "https://example.com/live/playlist.m3u8" } }
+{ "source": { "type": "stream", "url": "rtsp://camera.example/stream1" } }
+
+// 6) YouTube ライブ (video_id は配信再開で変わることがある。
+//    channel_id 指定ならチャンネルの現行ライブに自動追従)
 { "source": { "type": "youtube", "video_id": "XXXXXXXXXXX" } }
 { "source": { "type": "youtube", "channel_id": "UCXXXXXXXXXXXXXXXXXXXXXX" } }
+
+// 7) ページ内に画像が埋め込まれているサイト。<img> / og:image から
+//    ライブカメラらしい画像を自動抽出。うまく取れないときは正規表現で指定
+{ "source": { "type": "page_image", "url": "https://example.com/livecam/" } }
+{ "source": {
+    "type": "page_image",
+    "url": "https://example.com/livecam/",
+    "image_regex": "src=\"(/cam/current_[^\"]+\\.jpg)\""
+} }
 ```
 
-### 推定を有効にする手順 (url 型カメラ)
+補足:
 
-1. ライブカメラページをブラウザの開発者ツール (ネットワークタブ) で開き、
-   定期更新される**静止画像の直接 URL** を調べて `source.url` に設定する
+- YouTube のフレーム取得には `yt-dlp` が必要です (requirements に含まれています)。
+  未インストールでもパネル内での視聴はできます
+- 取得失敗時はパネルにエラー内容が表示されるので、それを見て
+  `headers` や `image_regex` を調整してください
+- `stream` / `youtube` のフレーム取得は 1 回あたり数秒〜十数秒かかることがあります
+
+### 推定を有効にする手順
+
+1. カメラを上記いずれかの `source.type` で登録する (静止画 URL が
+   見つからないサイトでも `page_image` / `stream` / `youtube` で取得可能)
 2. アプリを起動し、**快晴で遠方までよく見える日**にそのカメラのパネルで
    「現在の画像を晴天時基準画像として保存」ボタンを押す
    (または `POST /api/cameras/{id}/capture_reference`)

@@ -22,24 +22,18 @@ class CameraConfig:
     heading_deg: float  # 撮影方位 (真北基準・時計回り)
     fov_deg: float  # 水平画角
     elevation_ft: float  # カメラ設置標高 (MSL)
-    # ソース種別:
-    #   local   … リポジトリ内の画像ファイル (デモ用)
-    #   url     … 静止画を直接取得できるライブカメラ URL → 視程・シーリング推定可
-    #   youtube … YouTube ライブ配信 (視聴のみ、推定なし)
-    #   page    … 提供元ページへのリンクのみ (視聴のみ、推定なし)
+    # ソース種別 (詳細は app/sources.py 冒頭のコメント参照):
+    #   local / url / mjpeg / stream / youtube / page_image / page
     source_type: str
-    source: str  # local: パス / url: 画像URL / youtube: video_id / page: ページURL
+    source: str  # local: パス / youtube: video_id / それ以外: URL
     youtube_channel_id: str = ""  # youtube で channel 埋め込みを使う場合
+    source_raw: dict = field(default_factory=dict)  # source 設定の生辞書 (headers 等)
     reference_image: str = ""  # 晴天時基準画像のパス (image 系のみ)
     targets: list[Target] = field(default_factory=list)
     sky_bbox: Optional[tuple[int, int, int, int]] = None
     description: str = ""
     attribution: str = ""  # 映像提供元の表記
     page_url: str = ""  # 提供元ページ (出典リンク)
-
-    @property
-    def is_image_source(self) -> bool:
-        return self.source_type in ("local", "url")
 
     @staticmethod
     def from_dict(d: dict) -> "CameraConfig":
@@ -52,7 +46,7 @@ class CameraConfig:
             or ""
         )
         ref = d.get("reference_image", "")
-        if not ref and stype in ("local", "url"):
+        if not ref and stype != "page":
             ref = f"data/reference/{d['id']}.jpg"
         return CameraConfig(
             id=d["id"],
@@ -65,6 +59,7 @@ class CameraConfig:
             source_type=stype,
             source=source,
             youtube_channel_id=src.get("channel_id", ""),
+            source_raw=src,
             reference_image=ref,
             targets=[Target.from_dict(t) for t in d.get("targets", [])],
             sky_bbox=(

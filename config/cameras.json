@@ -105,9 +105,9 @@
       "heading_deg": 270,
       "fov_deg": 50,
       "elevation_ft": 120,
-      "description": "湘南深沢付近から富士山方向。相模湾岸から見た富士山・丹沢方面の視程確認に有用 (提供元ページで閲覧)。",
+      "description": "湘南深沢付近から富士山方向。相模湾岸から見た富士山・丹沢方面の視程確認に有用。ページ内画像を自動抽出して表示。",
       "source": {
-        "type": "page",
+        "type": "page_image",
         "url": "https://www.shonan-monorail.co.jp/viewcamera/"
       },
       "attribution": "湘南モノレール株式会社",

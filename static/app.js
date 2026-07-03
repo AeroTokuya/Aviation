@@ -125,7 +125,7 @@ async function openPanel(camId) {
   const cam = data.camera;
   const est = data.estimate;
   const status = data.status;
-  const isImage = cam.source_type === "url" || cam.source_type === "local";
+  const isImage = cam.image_capable;
 
   document.getElementById("cam-name").textContent = cam.name;
   document.getElementById("cam-desc").textContent =
@@ -197,21 +197,23 @@ async function openPanel(camId) {
   }
   show("open-page", cam.source_type === "page");
 
-  // 画像 (url / local カメラ)
+  // 画像 (フレーム取得可能なカメラ)
   show("img-current-block", isImage && status !== "error");
   show("img-reference-block", isImage && data.has_reference);
   if (isImage) {
     const ts = Date.now();
-    document.getElementById("img-current").src = `/api/cameras/${camId}/image/current?t=${ts}`;
+    const cur = document.getElementById("img-current");
+    cur.onerror = () => show("img-current-block", false);
+    cur.src = `/api/cameras/${camId}/image/current?t=${ts}`;
     if (data.has_reference) {
       document.getElementById("img-reference").src = `/api/cameras/${camId}/image/reference?t=${ts}`;
     }
     document.getElementById("img-time").textContent = new Date().toLocaleTimeString("ja-JP");
   }
 
-  // 基準画像の取得ボタン (url カメラのみ)
+  // 基準画像の取得ボタン (取得可能なリモートカメラのみ)
   const capBtn = document.getElementById("capture-reference");
-  show("capture-reference", cam.source_type === "url");
+  show("capture-reference", isImage && cam.source_type !== "local");
   capBtn.onclick = async () => {
     const msg = data.has_reference
       ? "既存の晴天時基準画像を現在の画像で上書きします。今は快晴で遠方まで見えていますか?"
@@ -221,15 +223,17 @@ async function openPanel(camId) {
     alert(r.ok ? "保存しました。" : "保存に失敗しました: " + (await r.text()));
     openPanel(camId);
   };
-  if (status === "needs_reference") {
-    document.getElementById("setup-hint").textContent =
+  let hint = "";
+  if (data.last_error) {
+    hint = "画像取得エラー: " + data.last_error;
+  } else if (status === "needs_reference") {
+    hint =
       "晴天時の基準画像が未取得です。快晴の日に下のボタンで取得すると画像比較ができるようになります。距離・標高つきターゲットを config/cameras.json に登録すると視程・シーリング推定が有効になります。";
   } else if (status === "needs_targets") {
-    document.getElementById("setup-hint").textContent =
+    hint =
       "基準画像はあります。config/cameras.json にターゲット (距離・標高・bbox) を登録すると視程・シーリング推定が有効になります。";
-  } else {
-    document.getElementById("setup-hint").textContent = "";
   }
+  document.getElementById("setup-hint").textContent = hint;
 
   // ターゲット表・注記 (推定ありのときのみ)
   show("targets-section", !!est);

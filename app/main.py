@@ -25,13 +25,13 @@ def _status(cam: CameraConfig) -> str:
     estimate        … 推定可能 (基準画像 + ターゲットあり)
     needs_targets   … 画像はあるがターゲット未設定 → 画像比較のみ
     needs_reference … 晴天時基準画像が未取得 → 現在画像のみ
-    view            … YouTube 等の映像視聴のみ
+    view            … 映像視聴のみ (フレーム取得不可)
     page            … 提供元ページへのリンクのみ
     """
-    if cam.source_type == "youtube":
-        return "view"
     if cam.source_type == "page":
         return "page"
+    if not sources.image_capable(cam):
+        return "view"
     if sources.reference_image(cam) is None:
         return "needs_reference"
     if not cam.targets:
@@ -67,6 +67,7 @@ def _camera_info(cam: CameraConfig) -> dict:
         "youtube_channel_id": cam.youtube_channel_id,
         "attribution": cam.attribution,
         "page_url": cam.page_url,
+        "image_capable": sources.image_capable(cam),
     }
 
 
@@ -111,6 +112,7 @@ def camera_estimate(cam_id: str) -> dict:
         "camera": _camera_info(cam),
         "status": status,
         "has_reference": sources.reference_image(cam) is not None,
+        "last_error": sources.last_error(cam_id),
         "estimate": asdict(est) if est is not None else None,
     }
 
@@ -144,11 +146,11 @@ def capture_reference(cam_id: str) -> dict:
     cam = cameras.get(cam_id)
     if cam is None:
         raise HTTPException(404, f"カメラ {cam_id} は存在しません")
-    if cam.source_type != "url":
-        raise HTTPException(400, "基準画像の取得は url 型カメラのみ対応です")
+    if cam.source_type == "local" or not sources.image_capable(cam):
+        raise HTTPException(400, "このカメラは基準画像の取得に対応していません")
     img = sources.current_image(cam)
     if img is None:
-        raise HTTPException(502, "現在画像を取得できません")
+        raise HTTPException(502, f"現在画像を取得できません: {sources.last_error(cam_id)}")
     path = sources.save_reference(cam, img)
     return {"saved": path}
 
