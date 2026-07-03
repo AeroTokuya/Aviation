@@ -31,10 +31,21 @@ let selectedCameraId = null;
 let markers = {};
 let refreshTimer = null;
 
+// アイコンの基準半径 px。cameraIcon 内の縮尺計算の分母も兼ねる
+const BASE_ICON_RADIUS = 34;
+
+/** ズームに応じたアイコン半径 (広域表示では小さくして重なりを軽減) */
+function iconRadius() {
+  const z = map.getZoom();
+  if (!Number.isFinite(z) || z >= 10) return BASE_ICON_RADIUS;
+  if (z >= 8) return 26;
+  return 19;
+}
+
 /** 撮影方角を示す扇形 (FOV) + カメラ本体の SVG アイコンを作る */
-function cameraIcon(heading, fov, color) {
-  const r = 34; // 扇形の半径 px
+function cameraIcon(heading, fov, color, r) {
   const cx = r, cy = r;
+  const s = r / BASE_ICON_RADIUS; // 基準サイズに対する縮尺
   const a0 = ((heading - fov / 2 - 90) * Math.PI) / 180;
   const a1 = ((heading + fov / 2 - 90) * Math.PI) / 180;
   const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
@@ -44,8 +55,8 @@ function cameraIcon(heading, fov, color) {
     <svg width="${r * 2}" height="${r * 2}" viewBox="0 0 ${r * 2} ${r * 2}">
       <path d="M${cx},${cy} L${x0},${y0} A${r},${r} 0 ${large} 1 ${x1},${y1} Z"
             fill="${color}" fill-opacity="0.30" stroke="${color}" stroke-width="1.5"/>
-      <circle cx="${cx}" cy="${cy}" r="11" fill="${color}" stroke="#fff" stroke-width="2.5"/>
-      <g transform="translate(${cx - 6},${cy - 4.5})">
+      <circle cx="${cx}" cy="${cy}" r="${11 * s}" fill="${color}" stroke="#fff" stroke-width="${2.5 * s}"/>
+      <g transform="translate(${cx},${cy}) scale(${s}) translate(-6,-4.5)">
         <rect x="0" y="1" width="8.5" height="7" rx="1.2" fill="#fff"/>
         <path d="M8.5 3.2 L12 1.2 V7.8 L8.5 5.8 Z" fill="#fff"/>
       </g>
@@ -72,10 +83,19 @@ function fmtCeiling(s) {
   return `約 ${Math.round(s.ceiling_ft_agl).toLocaleString()} ft`;
 }
 
+let camerasCache = [];
+
 async function loadCameras() {
   const res = await fetch("/api/cameras");
   const cams = await res.json();
+  camerasCache = cams;
+  renderMarkers(cams);
+}
+
+function renderMarkers(cams) {
   const bounds = [];
+  const r = iconRadius();
+  lastIconRadius = r;
   for (const cam of cams) {
     let color;
     if (cam.summary) {
@@ -83,7 +103,7 @@ async function loadCameras() {
     } else {
       color = cam.status === "error" ? CATEGORY_COLORS.UNKNOWN : VIEW_COLOR;
     }
-    const icon = cameraIcon(cam.heading_deg, cam.fov_deg, color);
+    const icon = cameraIcon(cam.heading_deg, cam.fov_deg, color, r);
     const tooltip = cam.summary
       ? `${cam.name}<br>視程 ${fmtVisibility(cam.summary)} / シーリング ${fmtCeiling(cam.summary)}`
       : `${cam.name}<br>${STATUS_LABELS[cam.status] || ""}`;
@@ -104,6 +124,13 @@ async function loadCameras() {
     map._loadedOnce = true;
   }
 }
+
+let lastIconRadius = null;
+map.on("zoomend", () => {
+  // 半径バケットが変わらないズームでは全マーカーの再生成をしない
+  if (iconRadius() === lastIconRadius) return;
+  renderMarkers(camerasCache);
+});
 
 function show(id, visible) {
   document.getElementById(id).classList.toggle("hidden", !visible);
@@ -174,6 +201,10 @@ async function openPanel(camId) {
       ? `${est.cloud_cover_label} (${est.cloud_cover_oktas}/8)`
       : "—";
   }
+
+  // 視程トレンド (推定ありのカメラのみ)
+  show("trend-section", false);
+  if (est && est.visibility_km != null) loadTrend(camId);
 
   // YouTube ライブ埋め込み
   const video = document.getElementById("video-embed");
@@ -265,6 +296,101 @@ async function openPanel(camId) {
       li.textContent = n;
       notes.appendChild(li);
     }
+  }
+}
+
+/* ---------- 視程トレンド (スパークライン) ---------- */
+
+async function loadTrend(camId) {
+  try {
+    const res = await fetch(`/api/cameras/${camId}/history?hours=12`);
+    if (!res.ok) return;
+    const points = (await res.json()).points.filter((p) => p.visibility_km != null);
+    if (selectedCameraId !== camId) return;
+    if (points.length < 2) {
+      show("trend-section", false);
+      return;
+    }
+    show("trend-section", true);
+    drawTrend(points);
+    setTrendArrow(points);
+  } catch {
+    show("trend-section", false);
+  }
+}
+
+function drawTrend(points) {
+  const canvas = document.getElementById("trend-canvas");
+  const W = (canvas.width = canvas.clientWidth || 360);
+  const H = canvas.height;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, W, H);
+
+  const t0 = points[0].ts;
+  const t1 = points[points.length - 1].ts;
+  const span = Math.max(t1 - t0, 1);
+  const maxV = Math.max(...points.map((p) => p.visibility_km), 10);
+  const pad = 6;
+  const x = (ts) => pad + ((ts - t0) / span) * (W - 2 * pad);
+  const y = (v) => H - pad - (v / maxV) * (H - 2 * pad);
+
+  // 目盛り (5km / 8km: フライトカテゴリ境界)
+  for (const [v, color] of [[5, "#d62828"], [8, "#1f6fd6"]]) {
+    if (v < maxV) {
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.35;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pad, y(v));
+      ctx.lineTo(W - pad, y(v));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  ctx.strokeStyle = "#14213d";
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const px = x(p.ts), py = y(p.visibility_km);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  });
+  ctx.stroke();
+  const last = points[points.length - 1];
+  ctx.fillStyle = "#14213d";
+  ctx.beginPath();
+  ctx.arc(x(last.ts), y(last.visibility_km), 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.font = "10px sans-serif";
+  ctx.fillStyle = "#556";
+  ctx.fillText(`${maxV.toFixed(0)}km`, 2, 10);
+}
+
+function setTrendArrow(points) {
+  const arrow = document.getElementById("trend-arrow");
+  const last = points[points.length - 1];
+  // 約1時間前の値と比較
+  const targetTs = last.ts - 3600;
+  let past = points[0];
+  for (const p of points) {
+    if (Math.abs(p.ts - targetTs) < Math.abs(past.ts - targetTs)) past = p;
+  }
+  if (last.ts - past.ts < 900) {
+    arrow.textContent = "";
+    return;
+  }
+  const ratio = last.visibility_km / Math.max(past.visibility_km, 0.1);
+  if (ratio > 1.15) {
+    arrow.textContent = "↑ 改善傾向";
+    arrow.className = "up";
+  } else if (ratio < 0.85) {
+    arrow.textContent = "↓ 悪化傾向";
+    arrow.className = "down";
+  } else {
+    arrow.textContent = "→ 横ばい";
+    arrow.className = "flat";
   }
 }
 

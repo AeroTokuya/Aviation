@@ -137,6 +137,21 @@ class TestCeiling:
         assert notes
 
 
+class TestLowLight:
+    def test_night_image_returns_unknown(self):
+        ref, cur, boxes = make_scene([0.5])
+        night = (cur.astype(float) * 0.1).astype("uint8")  # 平均輝度を大きく下げる
+        targets = [Target(name="a", distance_km=5, bbox=boxes[0])]
+        est = analysis.analyze(ref, night, targets)
+        assert est.flight_category == "UNKNOWN"
+        assert est.visibility_km is None
+        assert any("夜間" in n for n in est.notes)
+
+    def test_daylight_not_flagged(self):
+        ref, cur, boxes = make_scene([0.5])
+        assert not analysis.is_low_light(cur)
+
+
 class TestFlightCategory:
     @pytest.mark.parametrize(
         "vis,ceil,unlimited,expected",

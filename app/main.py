@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import analysis, sources
+from . import analysis, history, sources
 from .config import CameraConfig, ROOT, load_cameras, save_camera_setup
 
 app = FastAPI(title="HeliWX", description="ヘリコプター運航向け 視程・シーリング推定")
@@ -48,9 +48,14 @@ def _try_analyze(cam: CameraConfig) -> Optional[analysis.Estimate]:
     cur = sources.current_image(cam)
     if ref is None or cur is None:
         return None
-    return analysis.analyze(
+    est = analysis.analyze(
         ref, cur, cam.targets, camera_elevation_ft=cam.elevation_ft, sky_bbox=cam.sky_bbox
     )
+    try:
+        history.record(cam.id, est)
+    except Exception:
+        pass  # 履歴は副次機能: 記録の失敗で正常な推定結果を潰さない
+    return est
 
 
 def _camera_info(cam: CameraConfig) -> dict:
@@ -128,6 +133,15 @@ def camera_estimate(cam_id: str) -> dict:
             "sky_bbox": list(cam.sky_bbox) if cam.sky_bbox else None,
         },
     }
+
+
+@app.get("/api/cameras/{cam_id}/history")
+def camera_history(cam_id: str, hours: float = 12.0) -> dict:
+    """視程・シーリングの推移 (トレンド表示用)。"""
+    if cam_id not in cameras:
+        raise HTTPException(404, f"カメラ {cam_id} は存在しません")
+    hours = max(1.0, min(hours, 48.0))
+    return {"points": history.load(cam_id, hours)}
 
 
 @app.get("/api/cameras/{cam_id}/image/{kind}")

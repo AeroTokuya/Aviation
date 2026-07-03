@@ -30,6 +30,9 @@ RATIO_OBSCURED = 0.15
 # 視程の報告上限 (km)。これを超える推定は「上限以上」として報告する
 VISIBILITY_CAP_KM = 50.0
 
+# 現在画像の平均輝度がこの値未満なら夜間・低照度とみなし推定しない
+LOW_LIGHT_THRESHOLD = 40.0
+
 # 雲量 (8分量) → 記号
 OKTA_LABELS = [
     (0, "SKC"),
@@ -337,6 +340,11 @@ def flight_category(
     return ["LIFR", "IFR", "MVFR", "VFR"][min(vis_cat(visibility_km), ceil_cat(ceil))]
 
 
+def is_low_light(current: np.ndarray) -> bool:
+    """夜間・低照度画像かどうか。この状態ではコントラスト比較が成立しない。"""
+    return float(np.mean(_to_gray(current))) < LOW_LIGHT_THRESHOLD
+
+
 def analyze(
     reference: np.ndarray,
     current: np.ndarray,
@@ -347,6 +355,19 @@ def analyze(
     """基準画像・現在画像・ターゲット定義から総合推定を行う。"""
     if reference.shape[:2] != current.shape[:2]:
         current = cv2.resize(current, (reference.shape[1], reference.shape[0]))
+
+    if is_low_light(current):
+        return Estimate(
+            visibility_km=None,
+            visibility_is_lower_bound=False,
+            ceiling_ft_agl=None,
+            ceiling_is_unlimited=False,
+            cloud_cover_oktas=None,
+            cloud_cover_label=None,
+            flight_category="UNKNOWN",
+            targets=[],
+            notes=["夜間・低照度のため推定できません (日中の画像でのみ有効)"],
+        )
 
     ordered = sorted(targets, key=lambda t: t.distance_km)
     ratios = [

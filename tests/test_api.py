@@ -12,11 +12,19 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app import config as config_mod  # noqa: E402
+from app import history as history_mod  # noqa: E402
 from app.main import app  # noqa: E402
 
 client = TestClient(app)
 
 DEMO_ID = "tokyo-heliport-west"
+
+
+@pytest.fixture(autouse=True)
+def isolated_history(tmp_path, monkeypatch):
+    """API 呼び出しの履歴記録がリポジトリの data/history を汚さないよう隔離する。"""
+    monkeypatch.setattr(history_mod, "HISTORY_DIR", tmp_path / "history")
+    monkeypatch.setattr(history_mod, "_last_recorded", {})
 
 
 class TestListCameras:
