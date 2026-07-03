@@ -59,8 +59,9 @@ async function init() {
 }
 
 function buildMap() {
-  state.map = L.map('map', { zoomControl: true, tap: true, attributionControl: true })
+  state.map = L.map('map', { zoomControl: false, tap: true, attributionControl: true })
     .setView([35.6, 139.7], 8);
+  L.control.zoom({ position: 'bottomleft' }).addTo(state.map);
 
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18, crossOrigin: true,
@@ -109,15 +110,18 @@ function renderLayer(name) {
   const feats = gj.features || [];
   let list = feats;
   if (name in GATED) {
-    if (state.map.getZoom() < GATED[name]) { updateGateNote(name, feats.length, 0); return; }
+    const z = state.map.getZoom();
+    if (z < GATED[name]) { updateGateNote(name, feats.length, 0); return; }
     const b = state.map.getBounds();
     list = feats.filter(f => {
       const c = f.geometry && f.geometry.coordinates;
       return c && b.contains([c[1], c[0]]);
     });
+    // ズーム 11 未満は病院ヘリパッドのみ表示(密集地の視認性優先)
+    if (name === 'heliports' && z < 11) list = list.filter(f => f.properties.type === 'hospital');
     // 描画上限(安全弁)。病院ヘリパッドを優先表示。
     if (list.length > 400) {
-      list.sort((a, z) => (a.properties.type === 'hospital' ? 0 : 1) - (z.properties.type === 'hospital' ? 0 : 1));
+      list.sort((a, z2) => (a.properties.type === 'hospital' ? 0 : 1) - (z2.properties.type === 'hospital' ? 0 : 1));
       list = list.slice(0, 400);
     }
     updateGateNote(name, feats.length, list.length);

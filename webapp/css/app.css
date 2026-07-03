@@ -95,7 +95,7 @@ body.theme-night .leaflet-tile-pane { filter: brightness(0.55) contrast(1.05) sa
 .rb-head #rb-summary { color: var(--accent); font-variant-numeric: tabular-nums; }
 .rb-spacer { flex: 1; }
 #rb-legs { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
-.leg { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center;
+.leg { display: grid; grid-template-columns: 26px 1fr auto auto auto; gap: 8px; align-items: center;
   padding: 8px; border-radius: 10px; background: var(--panel-solid); border: 1px solid var(--line); font-size: 14px; }
 .leg .num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #001; display: grid; place-items: center; font-weight: 700; font-size: 13px; }
 .leg .nm { font-variant-numeric: tabular-nums; color: var(--muted); }
