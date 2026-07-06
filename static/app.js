@@ -11,11 +11,20 @@ const CATEGORY_COLORS = {
 // 推定なし (映像視聴のみ / 設定未完了) のアイコン色
 const VIEW_COLOR = "#546686";
 
+// 簡易評価 (ターゲット未設定でも出る定性評価) の色
+const QUICK_COLORS = {
+  good: "#1e9e4f",
+  slight: "#1f6fd6",
+  haze: "#e07b00",
+  fog: "#d62828",
+  night: "#555a66",
+};
+
 const STATUS_LABELS = {
   view: "ライブ映像 (推定なし)",
   page: "提供元ページで映像確認",
-  needs_reference: "基準画像 未取得",
-  needs_targets: "画像比較のみ (ターゲット未設定)",
+  needs_reference: "簡易評価中 (基準画像 未取得)",
+  needs_targets: "簡易評価中 (ターゲット未設定)",
   error: "画像取得エラー",
 };
 
@@ -42,8 +51,9 @@ function iconRadius() {
   return 19;
 }
 
-/** 撮影方角を示す扇形 (FOV) + カメラ本体の SVG アイコンを作る */
-function cameraIcon(heading, fov, color, r) {
+/** 撮影方角を示す扇形 (FOV) + カメラ本体の SVG アイコンを作る。
+ *  dashed=true は簡易評価 (参考値) を示す破線スタイル */
+function cameraIcon(heading, fov, color, r, dashed) {
   const cx = r, cy = r;
   const s = r / BASE_ICON_RADIUS; // 基準サイズに対する縮尺
   const a0 = ((heading - fov / 2 - 90) * Math.PI) / 180;
@@ -54,7 +64,8 @@ function cameraIcon(heading, fov, color, r) {
   const svg = `
     <svg width="${r * 2}" height="${r * 2}" viewBox="0 0 ${r * 2} ${r * 2}">
       <path d="M${cx},${cy} L${x0},${y0} A${r},${r} 0 ${large} 1 ${x1},${y1} Z"
-            fill="${color}" fill-opacity="0.30" stroke="${color}" stroke-width="1.5"/>
+            fill="${color}" fill-opacity="0.30" stroke="${color}" stroke-width="1.5"
+            ${dashed ? 'stroke-dasharray="4 3"' : ""}/>
       <circle cx="${cx}" cy="${cy}" r="${11 * s}" fill="${color}" stroke="#fff" stroke-width="${2.5 * s}"/>
       <g transform="translate(${cx},${cy}) scale(${s}) translate(-6,-4.5)">
         <rect x="0" y="1" width="8.5" height="7" rx="1.2" fill="#fff"/>
@@ -98,15 +109,21 @@ function renderMarkers(cams) {
   lastIconRadius = r;
   for (const cam of cams) {
     let color;
+    let dashed = false;
+    let statusLine = STATUS_LABELS[cam.status] || "";
     if (cam.summary) {
       color = CATEGORY_COLORS[cam.summary.flight_category] || CATEGORY_COLORS.UNKNOWN;
+      statusLine = `視程 ${fmtVisibility(cam.summary)} / シーリング ${fmtCeiling(cam.summary)}`;
+    } else if (cam.quick) {
+      // ターゲット未設定でも簡易評価で色分け (破線 = 参考値)
+      color = QUICK_COLORS[cam.quick.level] || CATEGORY_COLORS.UNKNOWN;
+      dashed = true;
+      statusLine = `簡易評価: ${cam.quick.label}`;
     } else {
       color = cam.status === "error" ? CATEGORY_COLORS.UNKNOWN : VIEW_COLOR;
     }
-    const icon = cameraIcon(cam.heading_deg, cam.fov_deg, color, r);
-    const tooltip = cam.summary
-      ? `${cam.name}<br>視程 ${fmtVisibility(cam.summary)} / シーリング ${fmtCeiling(cam.summary)}`
-      : `${cam.name}<br>${STATUS_LABELS[cam.status] || ""}`;
+    const icon = cameraIcon(cam.heading_deg, cam.fov_deg, color, r, dashed);
+    const tooltip = `${cam.name}<br>${statusLine}`;
     if (markers[cam.id]) {
       markers[cam.id].setIcon(icon);
       markers[cam.id].setTooltipContent(tooltip);
@@ -178,9 +195,22 @@ async function openPanel(camId) {
 
   // ステータスバッジ
   const badge = document.getElementById("category-badge");
+  const quickNote = document.getElementById("quick-note");
+  quickNote.textContent = "";
   if (est) {
     badge.textContent = est.flight_category;
     badge.className = "badge " + est.flight_category.toLowerCase();
+  } else if (data.quick) {
+    badge.textContent = data.quick.label;
+    badge.className = "badge q-" + data.quick.level;
+    const parts = ["簡易評価 (参考値)"];
+    if (data.quick.clarity_pct != null) {
+      parts.push(`自動学習した晴天基準との比較: 鮮明度 ${data.quick.clarity_pct}%`);
+    } else if (data.quick.fog_score != null) {
+      parts.push(`単一画像の霧・霞指数: ${data.quick.fog_score} (0=澄明 1=濃霧的)`);
+      parts.push("運用を続けると晴天基準を自動学習し精度が上がります");
+    }
+    quickNote.textContent = parts.join(" / ");
   } else {
     badge.textContent = STATUS_LABELS[status] || status;
     badge.className = "badge neutral";
@@ -259,6 +289,11 @@ async function openPanel(camId) {
   const editBtn = document.getElementById("open-editor");
   show("open-editor", isImage && data.has_reference);
   editBtn.onclick = () => toggleEditor(data);
+
+  // カメラ削除ボタン
+  const delBtn = document.getElementById("delete-camera");
+  show("delete-camera", true);
+  delBtn.onclick = () => deleteCamera(camId, cam.name);
 
   // 基準画像の取得ボタン (取得可能なリモートカメラのみ)
   const capBtn = document.getElementById("capture-reference");
@@ -611,6 +646,78 @@ function initEditorEvents() {
 }
 
 initEditorEvents();
+
+/* ---------- カメラの追加・削除 ---------- */
+
+function initAddCamera() {
+  const modal = document.getElementById("add-camera-modal");
+  document.getElementById("open-add-camera").addEventListener("click", () => {
+    const c = map.getCenter();
+    document.getElementById("ac-lat").value = c.lat.toFixed(4);
+    document.getElementById("ac-lon").value = c.lng.toFixed(4);
+    modal.classList.remove("hidden");
+  });
+  document.getElementById("ac-cancel").addEventListener("click", () =>
+    modal.classList.add("hidden")
+  );
+  document.getElementById("ac-use-center").addEventListener("click", () => {
+    const c = map.getCenter();
+    document.getElementById("ac-lat").value = c.lat.toFixed(4);
+    document.getElementById("ac-lon").value = c.lng.toFixed(4);
+  });
+  document.getElementById("ac-submit").addEventListener("click", async () => {
+    const payload = {
+      name: document.getElementById("ac-name").value.trim(),
+      source_type: document.getElementById("ac-type").value,
+      source_value: document.getElementById("ac-value").value.trim(),
+      lat: parseFloat(document.getElementById("ac-lat").value),
+      lon: parseFloat(document.getElementById("ac-lon").value),
+      heading_deg: parseFloat(document.getElementById("ac-heading").value) || 0,
+      fov_deg: parseFloat(document.getElementById("ac-fov").value) || 60,
+      metar_station: document.getElementById("ac-metar").value.trim(),
+      attribution: document.getElementById("ac-attr").value.trim(),
+      page_url: document.getElementById("ac-page").value.trim(),
+    };
+    if (!payload.name || !payload.source_value || isNaN(payload.lat) || isNaN(payload.lon)) {
+      alert("名前・URL(ID)・緯度・経度は必須です。");
+      return;
+    }
+    const res = await fetch("/api/cameras", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      alert("追加に失敗しました: " + (await res.text()));
+      return;
+    }
+    const body = await res.json();
+    modal.classList.add("hidden");
+    ["ac-name", "ac-value", "ac-metar", "ac-attr", "ac-page"].forEach(
+      (id) => (document.getElementById(id).value = "")
+    );
+    await loadCameras();
+    if (body.id) openPanel(body.id);
+  });
+}
+
+async function deleteCamera(camId, camName) {
+  if (!confirm(`カメラ「${camName}」を削除します。よろしいですか?`)) return;
+  const res = await fetch(`/api/cameras/${camId}`, { method: "DELETE" });
+  if (!res.ok) {
+    alert("削除に失敗しました: " + (await res.text()));
+    return;
+  }
+  if (markers[camId]) {
+    map.removeLayer(markers[camId]);
+    delete markers[camId];
+  }
+  document.getElementById("panel").classList.add("hidden");
+  selectedCameraId = null;
+  loadCameras();
+}
+
+initAddCamera();
 
 document.getElementById("panel-close").addEventListener("click", () => {
   document.getElementById("panel").classList.add("hidden");

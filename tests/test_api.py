@@ -76,6 +76,89 @@ class TestImages:
         assert client.get(f"/api/cameras/{DEMO_ID}/image/zzz").status_code == 404
 
 
+class TestQuickAssessment:
+    def test_demo_camera_gets_quick(self, tmp_path, monkeypatch):
+        from app import quicklook as ql
+
+        monkeypatch.setattr(ql, "AUTO_REF_DIR", tmp_path / "auto_ref")
+        monkeypatch.setattr(ql, "_last_ref_check", {})
+        body = client.get(f"/api/cameras/{DEMO_ID}/estimate").json()
+        assert body["quick"] is not None
+        assert body["quick"]["level"] in ("good", "slight", "haze", "fog", "night")
+
+    def test_list_includes_quick_field(self):
+        cams = client.get("/api/cameras").json()
+        assert all("quick" in c for c in cams)
+
+
+class TestAddDeleteCamera:
+    @pytest.fixture()
+    def config_backup(self):
+        backup = config_mod.CONFIG_PATH.with_suffix(".json.bak2")
+        shutil.copy(config_mod.CONFIG_PATH, backup)
+        yield
+        shutil.move(backup, config_mod.CONFIG_PATH)
+
+    def test_add_then_delete(self, config_backup):
+        payload = {
+            "name": "テスト追加カメラ",
+            "lat": 34.5,
+            "lon": 135.5,
+            "heading_deg": 90,
+            "source_type": "url",
+            "source_value": "https://example.com/cam.jpg",
+            "metar_station": "rjbb",
+        }
+        res = client.post("/api/cameras", json=payload)
+        assert res.status_code == 200, res.text
+        cam_id = res.json()["id"]
+        assert cam_id.startswith("user-")
+
+        cams = {c["id"]: c for c in client.get("/api/cameras").json()}
+        assert cams[cam_id]["name"] == "テスト追加カメラ"
+
+        with open(config_mod.CONFIG_PATH, encoding="utf-8") as f:
+            raw = json.load(f)
+        entry = next(c for c in raw["cameras"] if c["id"] == cam_id)
+        assert entry["metar_station"] == "RJBB"
+
+        res = client.delete(f"/api/cameras/{cam_id}")
+        assert res.status_code == 200
+        assert cam_id not in {c["id"] for c in client.get("/api/cameras").json()}
+
+    def test_youtube_channel_id_detected(self, config_backup):
+        payload = {
+            "name": "YTチャンネル",
+            "lat": 35.0,
+            "lon": 139.0,
+            "heading_deg": 0,
+            "source_type": "youtube",
+            "source_value": "UC" + "x" * 22,
+        }
+        res = client.post("/api/cameras", json=payload)
+        assert res.status_code == 200
+        cam_id = res.json()["id"]
+        with open(config_mod.CONFIG_PATH, encoding="utf-8") as f:
+            raw = json.load(f)
+        entry = next(c for c in raw["cameras"] if c["id"] == cam_id)
+        assert entry["source"]["channel_id"] == "UC" + "x" * 22
+        client.delete(f"/api/cameras/{cam_id}")
+
+    def test_invalid_source_type_rejected(self):
+        payload = {
+            "name": "bad",
+            "lat": 35.0,
+            "lon": 139.0,
+            "heading_deg": 0,
+            "source_type": "local",
+            "source_value": "x",
+        }
+        assert client.post("/api/cameras", json=payload).status_code == 422
+
+    def test_delete_unknown_404(self):
+        assert client.delete("/api/cameras/nope").status_code == 404
+
+
 class TestSaveSetup:
     @pytest.fixture()
     def config_backup(self):

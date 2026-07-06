@@ -317,6 +317,10 @@ def last_error(cam_id: str) -> str:
     return _last_errors.get(cam_id, "")
 
 
+def has_cached_frame(cam_id: str) -> bool:
+    return cam_id in _frame_cache
+
+
 def _fetch_fresh(cam: CameraConfig) -> Optional[np.ndarray]:
     if cam.source_type == "local":
         return read_local(cam.source)

@@ -12,7 +12,43 @@
   <header id="topbar">
     <h1>HeliWX <span class="sub">ライブカメラ視程・シーリング推定</span></h1>
     <div id="disclaimer">参考情報 — 公式気象情報 (METAR/TAF 等) と併用し、最終判断は操縦士が行ってください</div>
+    <button id="open-add-camera" title="カメラを追加">＋カメラ追加</button>
   </header>
+
+  <div id="add-camera-modal" class="hidden">
+    <div id="add-camera-box">
+      <h2>カメラを追加</h2>
+      <label>名前 <input id="ac-name" placeholder="例: ○○港 ライブカメラ"></label>
+      <label>種別
+        <select id="ac-type">
+          <option value="url">静止画URL (jpg/png)</option>
+          <option value="youtube">YouTube (動画ID または チャンネルID)</option>
+          <option value="mjpeg">MJPEGストリーム</option>
+          <option value="stream">動画ストリーム (HLS/RTSP/MP4)</option>
+          <option value="page_image">ページ内画像を自動抽出</option>
+          <option value="page">リンクのみ</option>
+        </select>
+      </label>
+      <label>URL / ID <input id="ac-value" placeholder="https://... または videoID"></label>
+      <div class="ac-row">
+        <label>緯度 <input id="ac-lat" type="number" step="0.0001"></label>
+        <label>経度 <input id="ac-lon" type="number" step="0.0001"></label>
+        <button id="ac-use-center" type="button">地図の中心を使用</button>
+      </div>
+      <div class="ac-row">
+        <label>撮影方位 (°) <input id="ac-heading" type="number" min="0" max="360" value="0"></label>
+        <label>画角 (°) <input id="ac-fov" type="number" min="10" max="180" value="60"></label>
+        <label>METAR局 <input id="ac-metar" placeholder="RJTT" maxlength="4"></label>
+      </div>
+      <label>提供元の表記 (任意) <input id="ac-attr" placeholder="例: ○○市"></label>
+      <label>提供元ページURL (任意) <input id="ac-page" placeholder="https://..."></label>
+      <div class="ac-row">
+        <button id="ac-submit" type="button" class="primary-btn">追加する</button>
+        <button id="ac-cancel" type="button">キャンセル</button>
+      </div>
+      <p class="muted">追加後は自動的に簡易評価が始まります。映像の権利は提供元にあります — 利用規約を確認の上で登録してください。</p>
+    </div>
+  </div>
 
   <div id="main">
     <div id="map"></div>
@@ -24,6 +60,7 @@
       <p id="attribution" class="muted"></p>
 
       <div id="category-badge" class="badge">—</div>
+      <p id="quick-note" class="muted"></p>
 
       <div id="video-embed" class="hidden"></div>
       <button id="open-page" class="hidden action-btn">提供元ページで映像を見る</button>
@@ -108,6 +145,7 @@
       </div>
 
       <button id="refresh">再解析</button>
+      <button id="delete-camera" class="hidden danger-btn">このカメラを削除</button>
     </aside>
   </div>
 
@@ -118,6 +156,7 @@
     <div><span class="dot lifr"></span>LIFR</div>
     <div><span class="dot unknown"></span>不明</div>
     <div><span class="dot view"></span>映像のみ</div>
+    <div class="legend-note">破線 = 簡易評価 (参考値)</div>
   </div>
 
   <script src="vendor/leaflet.js"></script>

@@ -5,6 +5,9 @@
 
 from __future__ import annotations
 
+import os
+import time
+import uuid
 from dataclasses import asdict
 from typing import Optional
 
@@ -12,32 +15,34 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import analysis, history, metar, sources
-from .config import CameraConfig, ROOT, load_cameras, save_camera_setup
+from . import analysis, history, metar, quicklook, refresher, sources
+from .config import (
+    CameraConfig,
+    ROOT,
+    add_camera_entry,
+    delete_camera_entry,
+    load_cameras,
+    save_camera_setup,
+)
 
 app = FastAPI(title="HeliWX", description="ヘリコプター運航向け 視程・シーリング推定")
 
 cameras = load_cameras()
 
+# 動作状態の意味:
+#   estimate        … 視程・シーリング推定が可能 (基準画像 + ターゲットあり)
+#   needs_targets   … 画像はあるがターゲット未設定 → 画像比較 + 簡易評価
+#   needs_reference … 晴天時基準画像が未取得 → 現在画像 + 簡易評価
+#   view            … 映像視聴のみ (フレーム取得不可)
+#   page            … 提供元ページへのリンクのみ
+_status = refresher.camera_status
 
-def _status(cam: CameraConfig) -> str:
-    """カメラの動作状態を返す。
 
-    estimate        … 推定可能 (基準画像 + ターゲットあり)
-    needs_targets   … 画像はあるがターゲット未設定 → 画像比較のみ
-    needs_reference … 晴天時基準画像が未取得 → 現在画像のみ
-    view            … 映像視聴のみ (フレーム取得不可)
-    page            … 提供元ページへのリンクのみ
-    """
-    if cam.source_type == "page":
-        return "page"
-    if not sources.image_capable(cam):
-        return "view"
-    if sources.reference_image(cam) is None:
-        return "needs_reference"
-    if not cam.targets:
-        return "needs_targets"
-    return "estimate"
+@app.on_event("startup")
+def _start_refresher() -> None:
+    # テスト等では HELIWX_BACKGROUND_REFRESH=0 で巡回を止められる
+    if os.environ.get("HELIWX_BACKGROUND_REFRESH", "1") != "0":
+        refresher.start(lambda: list(cameras.values()))
 
 
 def _try_analyze(cam: CameraConfig) -> Optional[analysis.Estimate]:
@@ -79,25 +84,28 @@ def _camera_info(cam: CameraConfig) -> dict:
 
 @app.get("/api/cameras")
 def list_cameras() -> list[dict]:
-    """全カメラの位置・方角と最新推定サマリ (地図アイコン用)。"""
+    """全カメラの位置・方角と最新評価 (地図アイコン用)。
+
+    評価はバックグラウンド巡回のスナップショットを返す。まだ巡回が
+    済んでいないカメラは、ネットワーク取得を伴わない範囲で即時評価する
+    (ローカルのデモカメラは常に即時評価できる)。
+    """
     out = []
     for cam in cameras.values():
         item = _camera_info(cam)
-        item["status"] = _status(cam)
-        item["summary"] = None
-        try:
-            est = _try_analyze(cam)
-        except Exception:
-            est = None
-            item["status"] = "error"
-        if est is not None:
-            item["summary"] = {
-                "visibility_km": est.visibility_km,
-                "visibility_is_lower_bound": est.visibility_is_lower_bound,
-                "ceiling_ft_agl": est.ceiling_ft_agl,
-                "ceiling_is_unlimited": est.ceiling_is_unlimited,
-                "flight_category": est.flight_category,
-            }
+        snap = refresher.get(cam.id)
+        if snap is None:
+            try:
+                snap = refresher.evaluate_camera(cam, fetch_frames=False)
+            except Exception:
+                snap = {"status": "error", "summary": None, "quick": None,
+                        "last_error": "", "updated": time.time()}
+        item.update(
+            status=snap["status"],
+            summary=snap["summary"],
+            quick=snap["quick"],
+            last_error=snap.get("last_error", ""),
+        )
         out.append(item)
     return out
 
@@ -114,12 +122,25 @@ def camera_estimate(cam_id: str) -> dict:
             est = _try_analyze(cam)
         except Exception:
             status = "error"
+    # 簡易評価 (フレームは 60 秒キャッシュされるので二重取得にはならない)
+    quick = None
+    if status not in ("page", "view"):
+        cur = sources.current_image(cam)
+        if cur is not None:
+            try:
+                quicklook.consider_as_auto_reference(cam, cur)
+                quick = quicklook.assess(cam, cur)
+            except Exception:
+                quick = None
+        elif status != "error":
+            status = "error"
     return {
         "camera": _camera_info(cam),
         "status": status,
         "has_reference": sources.reference_image(cam) is not None,
         "last_error": sources.last_error(cam_id),
         "metar": metar.get_metar(cam.metar_station),
+        "quick": quick,
         "estimate": asdict(est) if est is not None else None,
         "setup": {
             "targets": [
@@ -163,6 +184,77 @@ def camera_image(cam_id: str, kind: str) -> Response:
         media_type="image/jpeg",
         headers={"Cache-Control": "no-store"},
     )
+
+
+SOURCE_TYPES = ("url", "mjpeg", "stream", "youtube", "page_image", "page")
+
+
+class CameraIn(BaseModel):
+    """ブラウザからのカメラ追加。"""
+
+    name: str = Field(min_length=1, max_length=80)
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    heading_deg: float = Field(ge=0, le=360)
+    fov_deg: float = Field(default=60, ge=10, le=180)
+    elevation_ft: float = Field(default=0, ge=-100, le=15000)
+    source_type: str
+    source_value: str = Field(min_length=1, max_length=500)  # URL または video/channel ID
+    description: str = Field(default="", max_length=300)
+    attribution: str = Field(default="", max_length=120)
+    page_url: str = Field(default="", max_length=500)
+    metar_station: str = Field(default="", max_length=4)
+
+
+@app.post("/api/cameras")
+def add_camera(body: CameraIn) -> dict:
+    """カメラを追加する (地図の「カメラ追加」フォームから使用)。"""
+    if body.source_type not in SOURCE_TYPES:
+        raise HTTPException(422, f"source_type は {SOURCE_TYPES} のいずれか")
+    if body.source_type == "youtube":
+        val = body.source_value.strip()
+        # チャンネル ID (UC...24桁) なら channel 埋め込み、それ以外は video_id
+        if val.startswith("UC") and len(val) == 24:
+            source = {"type": "youtube", "video_id": "", "channel_id": val}
+        else:
+            source = {"type": "youtube", "video_id": val}
+    else:
+        source = {"type": body.source_type, "url": body.source_value.strip()}
+
+    cam_id = f"user-{uuid.uuid4().hex[:8]}"
+    entry = {
+        "id": cam_id,
+        "name": body.name,
+        "lat": body.lat,
+        "lon": body.lon,
+        "heading_deg": body.heading_deg,
+        "fov_deg": body.fov_deg,
+        "elevation_ft": body.elevation_ft,
+        "description": body.description,
+        "source": source,
+        "attribution": body.attribution,
+        "page_url": body.page_url,
+        "metar_station": body.metar_station.upper(),
+    }
+    try:
+        cam = add_camera_entry(entry)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    cameras[cam_id] = cam
+    return {"id": cam_id, "status": _status(cam)}
+
+
+@app.delete("/api/cameras/{cam_id}")
+def delete_camera(cam_id: str) -> dict:
+    """カメラを削除する。"""
+    if cam_id not in cameras:
+        raise HTTPException(404, f"カメラ {cam_id} は存在しません")
+    try:
+        delete_camera_entry(cam_id)
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+    cameras.pop(cam_id, None)
+    return {"deleted": cam_id}
 
 
 class TargetIn(BaseModel):

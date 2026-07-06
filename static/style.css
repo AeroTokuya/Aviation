@@ -38,6 +38,12 @@ html, body { height: 100%; margin: 0; font-family: "Hiragino Sans", "Noto Sans J
 .badge.unknown, .dot.unknown { background: #888; }
 .badge.neutral { background: #546686; }
 .dot.view { background: #546686; }
+.badge.q-good { background: #1e9e4f; }
+.badge.q-slight { background: #1f6fd6; }
+.badge.q-haze { background: #e07b00; }
+.badge.q-fog { background: #d62828; }
+.badge.q-night { background: #555a66; }
+.badge[class*="q-"] { font-size: 13px; font-weight: 600; }
 
 .hidden { display: none !important; }
 
@@ -126,9 +132,45 @@ html, body { height: 100%; margin: 0; font-family: "Hiragino Sans", "Noto Sans J
   display: flex; gap: 12px;
 }
 #legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+#legend .legend-note { color: #667; }
 
 .cam-icon svg { overflow: visible; }
 .cam-icon { filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
+
+/* ---- カメラ追加 ---- */
+#open-add-camera {
+  margin-left: auto; padding: 5px 12px; border: 1px solid rgba(255,255,255,.5);
+  border-radius: 5px; background: transparent; color: #fff; font-size: 13px;
+  cursor: pointer; white-space: nowrap;
+}
+#open-add-camera:hover { background: rgba(255,255,255,.12); }
+#add-camera-modal {
+  position: fixed; inset: 0; z-index: 3000;
+  background: rgba(10,16,30,.55); display: flex; align-items: center; justify-content: center;
+}
+#add-camera-box {
+  background: #fff; border-radius: 10px; padding: 18px 20px;
+  width: 460px; max-width: 94vw; max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 8px 30px rgba(0,0,0,.4);
+}
+#add-camera-box h2 { margin: 0 0 12px; font-size: 16px; }
+#add-camera-box label { display: block; font-size: 12px; color: #445; margin-bottom: 8px; }
+#add-camera-box input, #add-camera-box select {
+  display: block; width: 100%; margin-top: 3px; padding: 6px 8px;
+  border: 1px solid #bbc4d4; border-radius: 5px; font-size: 13px;
+}
+.ac-row { display: flex; gap: 8px; align-items: end; margin-bottom: 8px; }
+.ac-row label { flex: 1; margin-bottom: 0; }
+.ac-row button {
+  padding: 6px 10px; border: 1px solid #14213d; border-radius: 5px;
+  background: #fff; color: #14213d; font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.primary-btn { background: #14213d !important; color: #fff !important; }
+.danger-btn {
+  width: 100%; padding: 7px; margin-top: 8px; border: 1px solid #d62828;
+  border-radius: 6px; background: #fff; color: #d62828; font-size: 12px; cursor: pointer;
+}
+.danger-btn:hover { background: #fdeaea; }
 
 /* ---- モバイル (狭い画面): パネルをボトムシート化 ---- */
 @media (max-width: 640px) {

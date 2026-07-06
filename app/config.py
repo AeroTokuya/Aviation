@@ -80,6 +80,35 @@ def load_cameras(path: Path = CONFIG_PATH) -> dict[str, CameraConfig]:
     return {c.id: c for c in cameras}
 
 
+def _write_config(raw: dict, path: Path) -> None:
+    tmp = path.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(raw, f, ensure_ascii=False, indent=2)
+    tmp.replace(path)
+
+
+def add_camera_entry(entry: dict, path: Path = CONFIG_PATH) -> CameraConfig:
+    """カメラを設定ファイルに追加する。id 重複はエラー。"""
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    if any(c["id"] == entry["id"] for c in raw["cameras"]):
+        raise ValueError(f"カメラ ID {entry['id']} は既に存在します")
+    raw["cameras"].append(entry)
+    _write_config(raw, path)
+    return CameraConfig.from_dict(entry)
+
+
+def delete_camera_entry(cam_id: str, path: Path = CONFIG_PATH) -> None:
+    """カメラを設定ファイルから削除する。存在しなければ KeyError。"""
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    before = len(raw["cameras"])
+    raw["cameras"] = [c for c in raw["cameras"] if c["id"] != cam_id]
+    if len(raw["cameras"]) == before:
+        raise KeyError(f"カメラ {cam_id} は設定に存在しません")
+    _write_config(raw, path)
+
+
 def save_camera_setup(
     cam_id: str,
     targets: list[dict],
@@ -102,8 +131,5 @@ def save_camera_setup(
             break
     else:
         raise KeyError(f"カメラ {cam_id} は設定に存在しません")
-    tmp = path.with_suffix(".json.tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(raw, f, ensure_ascii=False, indent=2)
-    tmp.replace(path)
+    _write_config(raw, path)
     return CameraConfig.from_dict(entry)
