@@ -2,6 +2,7 @@
 
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -78,7 +79,8 @@ class TestGetMetar:
     def test_error_returns_stale_cache(self):
         metar.get_metar("RJTT")  # キャッシュを作る
         fail_mode["on"] = True
-        metar._cache["RJTT"] = (0.0, RAW)  # TTL 切れに偽装
+        expired = time.monotonic() - metar.CACHE_TTL_SEC - 1
+        metar._cache["RJTT"] = (expired, RAW)  # TTL 切れに偽装
         out = metar.get_metar("RJTT")
         assert out["stale"] is True
         assert out["raw"] == RAW
