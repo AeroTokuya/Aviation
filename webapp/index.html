@@ -126,6 +126,7 @@
       <button class="chip" data-layer="hazards">送電線</button>
       <button class="chip" data-layer="route">ルート</button>
       <button class="chip" data-layer="airspace">空域</button>
+      <button class="chip" data-layer="wx">気象 (METAR)</button>
     </div>
     <div class="panel-sub">空域クラス <small>(円は概略範囲。AIP Japan で要照合)</small></div>
     <div class="chip-row" id="asp-chips">
@@ -142,8 +143,9 @@
     <div class="menu-panel">
       <div class="menu-head"><strong>メニュー</strong><button id="menu-close" class="minibtn">×</button></div>
       <button class="menu-item" id="mi-theme"><span>🌙</span> 昼 / 夜モード切替</button>
+      <button class="menu-item" id="mi-wx"><span>🌤️</span> 気象を今すぐ更新 (METAR/TAF)</button>
       <button class="menu-item" id="mi-save-area"><span>🗺️</span> 表示エリアをオフライン保存</button>
-      <button class="menu-item" id="mi-hazards"><span>⚡</span> 表示範囲のハザード取得 (OSM)</button>
+      <button class="menu-item" id="mi-hazards"><span>⚡</span> 表示範囲の送電線・障害物を取得 (OSM)</button>
       <button class="menu-item" id="mi-import"><span>📥</span> 公式/自作 GeoJSON を取込</button>
       <button class="menu-item" id="mi-sim"><span>🛰️</span> デモ飛行（ルートを模擬走行）</button>
       <input type="file" id="import-file" accept=".geojson,.json" hidden />
@@ -152,6 +154,10 @@
       </div>
       <div class="menu-row">
         <label>計画速度(ETE用・GPS無効時): <input type="number" id="gs" value="110" step="5" style="width:5em"> kt</label>
+      </div>
+      <div class="menu-row">
+        <label>燃料消費: <input type="number" id="fuel-burn" placeholder="--" step="5" style="width:4.5em"> L/h</label>
+        <label>搭載燃料: <input type="number" id="fuel-onboard" placeholder="--" step="10" style="width:4.5em"> L</label>
       </div>
       <div class="menu-note" id="cache-note"></div>
       <div class="menu-disclaimer">

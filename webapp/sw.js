@@ -1,7 +1,7 @@
 /* HeliNav Service Worker — オフライン対応
  * app-shell: cache-first / OSM tiles: cache-first(+network fill) / data: stale-while-revalidate
  */
-const SHELL = 'helinav-shell-v3';
+const SHELL = 'helinav-shell-v4';
 const TILES = 'helinav-tiles';
 const APP_FILES = [
   './',
@@ -61,7 +61,7 @@ self.addEventListener('fetch', e => {
   }
 
   // Overpass 等の外部 API はキャッシュしない(ネットワーク直)
-  if (url.host.includes('overpass')) return;
+  if (url.host.includes('overpass') || url.host.includes('aviationweather')) return;
 
   // アプリシェル/データ: cache-first + バックグラウンド更新
   e.respondWith(

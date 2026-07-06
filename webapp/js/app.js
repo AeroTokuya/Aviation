@@ -26,8 +26,10 @@ const ASP_CLASSES = {
 const state = {
   map: null,
   layers: {},          // layer name -> L.LayerGroup
-  visible: { airports: true, heliports: true, navaids: true, hazards: true, airspace: true, route: true },
+  visible: { airports: true, heliports: true, navaids: true, hazards: true, airspace: true, wx: true, route: true },
   asp: Object.fromEntries(Object.entries(ASP_CLASSES).map(([k, v]) => [k, v.on])),
+  wx: { by: {}, at: 0 },        // METAR/TAF: icaoId -> report
+  fuel: { burn: 0, onboard: 0 }, // L/h, L
   data: {},            // layer name -> GeoJSON
   route: [],           // [{lat, lon, name}]
   routeMode: false,
@@ -102,8 +104,11 @@ async function init() {
   registerSW();
   await loadAllData();
   buildSearchIndex();
+  restoreWx();
+  fetchWx();
+  setInterval(fetchWx, 10 * 60 * 1000);   // METAR は 10 分ごとに自動更新
   updateNetStatus();
-  window.addEventListener('online', updateNetStatus);
+  window.addEventListener('online', () => { updateNetStatus(); fetchWx(); });
   window.addEventListener('offline', updateNetStatus);
   requestWakeLock();
   document.addEventListener('visibilitychange', () => {
@@ -124,6 +129,7 @@ function buildMap() {
   }).addTo(state.map);
 
   for (const name of Object.keys(DATA_FILES)) state.layers[name] = L.layerGroup().addTo(state.map);
+  state.layers.wx = L.layerGroup().addTo(state.map);
   state.layers.route = L.layerGroup().addTo(state.map);
   for (const name of Object.keys(state.layers)) if (!state.visible[name]) state.map.removeLayer(state.layers[name]);
 
@@ -186,8 +192,8 @@ function renderLayer(name) {
       const c = f.geometry && f.geometry.coordinates;
       return c && b.contains([c[1], c[0]]);
     });
-    // ズーム 12 未満は病院ヘリパッドのみ表示(密集地の視認性優先)
-    if (name === 'heliports' && z < 12) list = list.filter(f => f.properties.type === 'hospital');
+    // ズーム 13 未満は病院ヘリパッドのみ表示(密集地の視認性優先)
+    if (name === 'heliports' && z < 13) list = list.filter(f => f.properties.type === 'hospital');
     // 描画上限(安全弁)。病院ヘリパッドを優先表示。
     if (list.length > 400) {
       list.sort((a, z2) => (a.properties.type === 'hospital' ? 0 : 1) - (z2.properties.type === 'hospital' ? 0 : 1));
@@ -249,15 +255,51 @@ function openAirspace(p) {
 }
 
 function renderHazards(gj, grp) {
-  L.geoJSON(gj, {
-    style: { color: '#ff9f1c', weight: 3, opacity: 0.9, dashArray: '1 6', lineCap: 'round' },
-    pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 4, color: '#ff9f1c', weight: 2, fillOpacity: 0.6 }),
-    onEachFeature: (f, layer) => {
-      const p = f.properties || {};
-      const label = p.name || (p.type === 'tower' ? '送電鉄塔' : '送電線');
-      layer.on('click', ev => { L.DomEvent.stop(ev); showToast('⚡ ' + label + (p.sample ? ' (サンプル)' : '')); });
-    },
-  }).addTo(grp);
+  for (const f of (gj.features || [])) {
+    const p = f.properties || {};
+    if (f.geometry.type === 'Point' && p.type === 'obstacle') {
+      // 障害物: 三角シンボル + 高さ(ft)ラベル
+      const [lon, lat] = f.geometry.coordinates;
+      const ft = p.height_m ? Math.round(p.height_m * 3.28084) : null;
+      const lbl = ft ? `<div class="mk-id ob-id">${ft.toLocaleString()}</div>` : '';
+      const icon = L.divIcon({
+        className: '', iconSize: [40, 40], iconAnchor: [20, 20],
+        html: `<div class="mk-rot"><div class="mk">${SYM.obstacle(p)}</div>${lbl}</div>`,
+      });
+      L.marker([lat, lon], { icon, keyboard: false })
+        .on('click', ev => { L.DomEvent.stop(ev); openObstacle(p, lat, lon); })
+        .addTo(grp);
+      continue;
+    }
+    L.geoJSON(f, {
+      style: { color: '#ff9f1c', weight: 3, opacity: 0.9, dashArray: '1 6', lineCap: 'round' },
+      pointToLayer: (f2, latlng) => L.circleMarker(latlng, { radius: 4, color: '#ff9f1c', weight: 2, fillOpacity: 0.6 }),
+      onEachFeature: (f2, layer) => {
+        const label = p.name || (p.type === 'tower' ? '送電鉄塔' : '送電線');
+        layer.on('click', ev => { L.DomEvent.stop(ev); showToast('⚡ ' + label + (p.sample ? ' (サンプル)' : '')); });
+      },
+    }).addTo(grp);
+  }
+}
+function openObstacle(p, lat, lon) {
+  const rows = [];
+  if (p.height_m) rows.push(['高さ', `${Math.round(p.height_m * 3.28084).toLocaleString()} ft (${p.height_m} m) AGL`]);
+  if (p.kind) rows.push(['種別', p.kind]);
+  rows.push(['座標', `${lat.toFixed(4)}, ${lon.toFixed(4)}`]);
+  if (state.own.latlng) {
+    const a = { lat: state.own.latlng.lat, lon: state.own.latlng.lng };
+    const nm = haversineNM(a, { lat, lon }), brg = bearingTrue(a, { lat, lon });
+    rows.push(['現在地から', `${fmtNM(nm)} NM / 磁 ${fmtBrg(trueToMag(brg))}°`]);
+  }
+  const kv = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('');
+  document.getElementById('sheet-body').innerHTML = `
+    <div class="sheet-title">⚠ ${escapeHtml(p.name || '障害物')}</div>
+    <div class="sheet-sub">障害物${p.sample ? ' (収録サンプル)' : ' (OSM 由来)'}</div>
+    <dl class="kv">${kv}</dl>
+    <div class="sheet-warn">⚠️ 障害物データは<b>網羅的ではありません</b>。低高度飛行時は航空図・現地情報で必ず確認してください。</div>
+    <div class="sheet-actions"><button class="btn-ghost" id="sheet-close">閉じる</button></div>`;
+  document.getElementById('sheet').classList.remove('hidden');
+  document.getElementById('sheet-close').onclick = closeSheet;
 }
 
 /* 航空図スタイルの SVG シンボル (VFRチャート風: 管制=青 / 非管制=マゼンタ) */
@@ -281,6 +323,14 @@ const SYM = {
     return `<svg viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="7.5" fill="var(--sym-bg)" stroke="var(--sym-hosp)" stroke-width="1.9"/>
       <path d="M9.2 8.4v7.2M14.8 8.4v7.2M9.2 12h5.6" stroke="var(--sym-hosp)" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
+  },
+  obstacle(p) {
+    // 航空図式の障害物シンボル (高さ 150m 以上は塔形を強調)
+    const tall = (p.height_m || 0) >= 150;
+    return `<svg viewBox="0 0 24 24" class="sym-sm">
+      <path d="M12 3.5 L18.5 20 H5.5 Z" fill="${tall ? 'var(--hazard)' : 'var(--sym-bg)'}" fill-opacity="${tall ? .45 : 1}" stroke="var(--hazard)" stroke-width="1.8" stroke-linejoin="round"/>
+      <circle cx="12" cy="3.5" r="1.7" fill="var(--hazard)"/>
     </svg>`;
   },
   navaid(p) {
@@ -312,6 +362,141 @@ function facilityIcon(f) {
 function listSym(type) {
   const p = type === 'airport' ? { freqs: { TWR: 1 } } : {};
   return `<span class="res-ic">${(SYM[type] || SYM.airport)(p)}</span>`;
+}
+
+/* ---------------- 気象 (METAR/TAF) ---------------- */
+// aviationweather.gov のデータ API (無料・CORS 可)。日本全域の METAR+TAF を一括取得。
+const WX_URL = 'https://aviationweather.gov/api/data/metar?bbox=24,122,46,148&format=json&taf=true';
+
+async function fetchWx(manual) {
+  if (!navigator.onLine) { if (manual) showToast('オフライン: 保存済みの気象を表示中'); return; }
+  try {
+    const res = await fetch(WX_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const arr = await res.json();
+    const by = {};
+    for (const m of arr) if (m.icaoId) by[m.icaoId] = m;
+    if (!Object.keys(by).length) throw new Error('データなし');
+    state.wx.by = by;
+    state.wx.at = Date.now();
+    try { localStorage.setItem('heli.wx', JSON.stringify({ at: state.wx.at, by })); } catch (_) {}
+    renderWx();
+    if (manual) showToast(`METAR ${Object.keys(by).length} 局を更新しました`);
+  } catch (e) {
+    if (manual) showToast('気象取得失敗: ' + e.message);
+  }
+}
+function restoreWx() {
+  try {
+    const w = JSON.parse(localStorage.getItem('heli.wx') || 'null');
+    if (w && w.by) { state.wx.by = w.by; state.wx.at = w.at || 0; renderWx(); }
+  } catch (_) {}
+}
+// フライトカテゴリ判定 (ceiling ft / 視程 SM)
+function wxCategory(m) {
+  let vis = m.visib;
+  if (typeof vis === 'string') vis = parseFloat(vis);
+  if (vis == null || isNaN(vis)) vis = 10;
+  let ceil = Infinity;
+  for (const c of (m.clouds || [])) {
+    if (['BKN', 'OVC', 'OVX', 'VV'].includes(c.cover) && c.base != null) ceil = Math.min(ceil, c.base);
+  }
+  if (ceil < 500 || vis < 1) return 'LIFR';
+  if (ceil < 1000 || vis < 3) return 'IFR';
+  if (ceil <= 3000 || vis <= 5) return 'MVFR';
+  return 'VFR';
+}
+const wxStale = () => state.wx.at && (Date.now() - state.wx.at) > 70 * 60 * 1000;
+function renderWx() {
+  const grp = state.layers.wx;
+  grp.clearLayers();
+  if (!state.data.airports) return;
+  const stale = wxStale() ? ' stale' : '';
+  for (const f of state.data.airports.features) {
+    const p = f.properties || {};
+    const m = state.wx.by[p.ident];
+    if (!m) continue;
+    const cat = wxCategory(m);
+    const [lon, lat] = f.geometry.coordinates;
+    const icon = L.divIcon({
+      className: '', iconSize: [40, 40], iconAnchor: [20, 20],
+      html: `<div class="mk-rot"><div class="wx-dot ${cat.toLowerCase()}${stale}">${cat}</div></div>`,
+    });
+    L.marker([lat, lon], { icon, keyboard: false, zIndexOffset: 500 })
+      .on('click', ev => { L.DomEvent.stop(ev); openFacility(f); })
+      .addTo(grp);
+  }
+}
+// シート用: METAR 解読 + 生電文
+function wxBlock(ident) {
+  const m = state.wx.by[ident];
+  if (!m) return '';
+  const cat = wxCategory(m);
+  const age = state.wx.at ? Math.round((Date.now() - state.wx.at) / 60000) : null;
+  const rows = [];
+  if (m.wdir != null && m.wspd != null) {
+    const dir = m.wdir === 0 && m.wspd === 0 ? 'CALM' : (typeof m.wdir === 'number' ? fmtBrg(m.wdir) + '°' : String(m.wdir));
+    rows.push(['風', `${dir} ${m.wspd}kt` + (m.wgst ? ` G${m.wgst}` : '')]);
+  }
+  if (m.visib != null) {
+    const v = typeof m.visib === 'string' ? parseFloat(m.visib) : m.visib;
+    const plus = typeof m.visib === 'string' && m.visib.includes('+');
+    if (!isNaN(v)) rows.push(['視程', `${plus ? '≥' : ''}${(v * 1.609).toFixed(v * 1.609 < 5 ? 1 : 0)} km`]);
+  }
+  const cl = (m.clouds || []).filter(c => c.cover && c.cover !== 'CAVOK').map(c => c.cover + (c.base != null ? ' ' + c.base.toLocaleString() + 'ft' : '')).join(' / ');
+  if (cl) rows.push(['雲', cl]);
+  if (m.temp != null) rows.push(['気温/露点', `${m.temp}°C / ${m.dewp != null ? m.dewp + '°C' : '--'}`]);
+  if (m.altim != null) rows.push(['QNH', `${Math.round(m.altim)} hPa`]);
+  const kv = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('');
+  return `
+    <div class="wx-head">
+      <span class="pill ${cat.toLowerCase()}">${cat}</span>
+      <span class="wx-age">${age != null ? `取得 ${age} 分前` : ''}${wxStale() ? ' ⚠古い' : ''}</span>
+    </div>
+    <dl class="kv">${kv}</dl>
+    ${m.rawOb ? `<pre class="raw">${escapeHtml(m.rawOb)}</pre>` : ''}
+    ${m.rawTaf ? `<pre class="raw">${escapeHtml(m.rawTaf)}</pre>` : ''}`;
+}
+
+/* ---------------- 日の出・日の入 (NOAA 略算) ---------------- */
+function sunTimes(lat, lng, date = new Date()) {
+  const rad = Math.PI / 180, dayMs = 864e5, J1970 = 2440588, J2000 = 2451545;
+  const toJulian = d => d.valueOf() / dayMs - 0.5 + J1970;
+  const fromJulian = j => new Date((j + 0.5 - J1970) * dayMs);
+  const lw = rad * -lng, phi = rad * lat;
+  const d = toJulian(date) - J2000;
+  const n = Math.round(d - 0.0009 - lw / (2 * Math.PI));
+  const approxTransit = Ht => 0.0009 + (Ht + lw) / (2 * Math.PI) + n;
+  const ds = approxTransit(0);
+  const M = rad * (357.5291 + 0.98560028 * ds);
+  const Lsun = M + rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) + rad * 102.9372 + Math.PI;
+  const dec = Math.asin(Math.sin(Lsun) * Math.sin(rad * 23.4397));
+  const Jnoon = J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * Lsun);
+  const cosH = (Math.sin(rad * -0.833) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec));
+  if (cosH < -1 || cosH > 1) return null;   // 白夜/極夜
+  const w0 = Math.acos(cosH);
+  const Jset = J2000 + approxTransit(w0) + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * Lsun);
+  return { rise: fromJulian(Jnoon - (Jset - Jnoon)), set: fromJulian(Jset) };
+}
+const fmtHM = d => d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+
+/* ---------------- 滑走路ミニ図 ---------------- */
+function rwyDiagram(p) {
+  if (!p.rwy) return '';
+  const m = String(p.rwy).match(/^(\d{2})/);
+  if (!m) return '';
+  const deg = parseInt(m[1], 10) * 10;
+  return `<div class="rwy-box">
+    <svg viewBox="0 0 84 84">
+      <circle cx="42" cy="42" r="38" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="42" y="12" text-anchor="middle" font-size="9" fill="var(--muted)" font-weight="700">N</text>
+      <g transform="rotate(${deg} 42 42)">
+        <rect x="37.5" y="10" width="9" height="64" rx="2" fill="var(--muted)"/>
+        <path d="M42 16v52" stroke="var(--panel-solid)" stroke-width="1.6" stroke-dasharray="5 4"/>
+      </g>
+    </svg>
+    <div class="rwy-lbl">RWY ${escapeHtml(String(p.rwy))}${p.rwy_cnt > 1 ? ` ×${p.rwy_cnt}` : ''}</div>
+  </div>`;
 }
 
 /* ---------------- 施設シート ---------------- */
@@ -347,15 +532,24 @@ function openFacility(f) {
     fromOwn = `<div class="sheet-sub">現在地から: <b>${fmtNM(nm)} NM</b> / 磁 ${fmtBrg(trueToMag(brg))}° (真 ${fmtBrg(brg)}°)</div>`;
   }
 
+  // 日の出/日の入 (VFR 日中制限の確認用)
+  const sun = sunTimes(lat, lon);
+  if (sun) rows.push(['日出/日没', `${fmtHM(sun.rise)} / ${fmtHM(sun.set)} JST`]);
+
   const kv = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('');
   const warn = p.type === 'navaid'
     ? `<div class="sheet-warn">⚠️ 周波数・位置はオープンデータ(OurAirports)由来で、日本の航法無線施設は再編により<b>古い/相違の可能性</b>があります。必ず最新の AIP Japan で照合してください。</div>`
     : '';
+  const wx = p.type === 'airport' ? wxBlock(p.ident) : '';
   document.getElementById('sheet-body').innerHTML = `
     <div class="sheet-title">${escapeHtml(title)}</div>
     <div class="sheet-sub">${escapeHtml(p.name_en || typeLabel(p.type))}</div>
     ${fromOwn}
-    <dl class="kv">${kv}</dl>
+    ${wx}
+    <div class="sheet-cols">
+      <dl class="kv">${kv}</dl>
+      ${rwyDiagram(p)}
+    </div>
     ${warn}
     <div class="sheet-actions">
       <button class="btn-primary" id="sheet-direct">D→ ダイレクト</button>
@@ -470,8 +664,16 @@ function updateRoutebar() {
   });
   legsEl.querySelectorAll('.leg').forEach(el => el.onclick = () => setActiveWp(+el.dataset.act));
   const etaTot = gsEff > 0 ? (total / gsEff) * 60 : Infinity;
+  // 燃料計画 (Garmin Pilot 参考): 必要燃料 + 30分予備
+  let fuelTxt = '';
+  if (state.fuel.burn > 0 && isFinite(etaTot) && state.route.length >= 2) {
+    const req = etaTot / 60 * state.fuel.burn;
+    const reserve = state.fuel.burn * 0.5;
+    fuelTxt = ` · 燃料 ${Math.round(req)}+予備${Math.round(reserve)}L`;
+    if (state.fuel.onboard > 0) fuelTxt += req + reserve > state.fuel.onboard ? ' ⚠不足' : ` / 搭載${Math.round(state.fuel.onboard)}L`;
+  }
   document.getElementById('rb-summary').textContent =
-    state.route.length >= 2 ? `全長 ${fmtNM(total)} NM · ${state.route.length - 1}区間 · ${fmtETE(etaTot)} @${Math.round(gsEff)}kt` : '地図/施設をタップ';
+    state.route.length >= 2 ? `全長 ${fmtNM(total)} NM · ${state.route.length - 1}区間 · ${fmtETE(etaTot)} @${Math.round(gsEff)}kt${fuelTxt}` : '地図/施設をタップ';
 }
 function openRoutebar() { document.getElementById('routebar').classList.remove('hidden'); }
 function clearRoute() { state.route = []; state.nav.activeIdx = null; redrawRoute(); updateHUD(); }
@@ -793,23 +995,50 @@ async function fetchHazards() {
   if (!navigator.onLine) { showToast('オフラインのため取得できません'); return; }
   const b = state.map.getBounds();
   const bbox = `${b.getSouth().toFixed(4)},${b.getWest().toFixed(4)},${b.getNorth().toFixed(4)},${b.getEast().toFixed(4)}`;
-  showToast('送電線を取得中…');
-  const q = `[out:json][timeout:25];(way["power"="line"](${bbox});way["power"="minor_line"](${bbox}););out geom;`;
+  showToast('送電線・障害物を取得中…');
+  const q = `[out:json][timeout:30];(
+    way["power"="line"](${bbox});
+    way["power"="minor_line"](${bbox});
+    node["man_made"~"^(tower|mast|chimney|communications_tower)$"]["height"](${bbox});
+    node["man_made"="wind_turbine"](${bbox});
+  );out geom;`;
   try {
     const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q) });
     const json = await res.json();
-    const feats = (json.elements || []).filter(el => el.geometry).map(el => ({
-      type: 'Feature',
-      properties: { type: 'powerline', name: (el.tags && (el.tags.name || el.tags.operator)) || '送電線', voltage: el.tags && el.tags.voltage },
-      geometry: { type: 'LineString', coordinates: el.geometry.map(g => [g.lon, g.lat]) },
-    }));
+    const feats = [];
+    let nLine = 0, nObst = 0;
+    for (const el of (json.elements || [])) {
+      const tags = el.tags || {};
+      if (el.type === 'way' && el.geometry) {
+        nLine++;
+        feats.push({
+          type: 'Feature',
+          properties: { type: 'powerline', name: tags.name || tags.operator || '送電線', voltage: tags.voltage },
+          geometry: { type: 'LineString', coordinates: el.geometry.map(g => [g.lon, g.lat]) },
+        });
+      } else if (el.type === 'node' && el.lat != null) {
+        // 障害物: 高さ 50m 以上 (風車はタグが無くても概ね 100m 級として収録)
+        const h = parseFloat(tags.height) || (tags.man_made === 'wind_turbine' ? 100 : 0);
+        if (h < 50) continue;
+        nObst++;
+        feats.push({
+          type: 'Feature',
+          properties: {
+            type: 'obstacle', height_m: Math.round(h),
+            name: tags.name || ({ chimney: '煙突', mast: '鉄塔・マスト', tower: '塔', communications_tower: '通信塔', wind_turbine: '風車' })[tags.man_made] || '障害物',
+            kind: tags.man_made,
+          },
+          geometry: { type: 'Point', coordinates: [el.lon, el.lat] },
+        });
+      }
+    }
     // 既存サンプル + 取得分をマージ
     const base = (state.data.hazards && state.data.hazards.features) || [];
     const merged = { type: 'FeatureCollection', features: base.filter(f => f.properties && f.properties.sample).concat(feats) };
     state.data.hazards = merged;
     localStorage.setItem('heli.data.hazards', JSON.stringify(merged));
     renderLayer('hazards');
-    showToast(`送電線 ${feats.length} 本を取得・保存しました`);
+    showToast(`送電線 ${nLine} 本・障害物 ${nObst} 件を取得・保存しました`);
   } catch (e) {
     showToast('取得失敗: ' + e.message);
   }
@@ -941,6 +1170,7 @@ function wireUI() {
   document.getElementById('btn-menu').onclick = () => openPanel('menu');
   document.getElementById('menu-close').onclick = () => closePanel('menu');
   document.getElementById('mi-theme').onclick = toggleTheme;
+  document.getElementById('mi-wx').onclick = () => { closePanel('menu'); fetchWx(true); };
   document.getElementById('mi-save-area').onclick = () => { closePanel('menu'); saveArea(); };
   document.getElementById('mi-hazards').onclick = () => { closePanel('menu'); fetchHazards(); };
   document.getElementById('mi-import').onclick = () => document.getElementById('import-file').click();
@@ -948,6 +1178,8 @@ function wireUI() {
   document.getElementById('import-file').onchange = e => { if (e.target.files[0]) importGeoJSON(e.target.files[0]); };
   document.getElementById('magvar').onchange = e => { state.magvar = parseFloat(e.target.value) || 0; savePrefs(); redrawRoute(); updateHUD(); };
   document.getElementById('gs').onchange = e => { state.gs = parseFloat(e.target.value) || 0; savePrefs(); updateRoutebar(); updateHUD(); };
+  document.getElementById('fuel-burn').onchange = e => { state.fuel.burn = parseFloat(e.target.value) || 0; savePrefs(); updateRoutebar(); };
+  document.getElementById('fuel-onboard').onchange = e => { state.fuel.onboard = parseFloat(e.target.value) || 0; savePrefs(); updateRoutebar(); };
   updateCacheNote();
 }
 
@@ -989,7 +1221,7 @@ function savePrefs() {
   localStorage.setItem('heli.prefs', JSON.stringify({
     night: document.body.classList.contains('theme-night'),
     magvar: state.magvar, gs: state.gs, mode: state.view.mode,
-    visible: state.visible, asp: state.asp,
+    visible: state.visible, asp: state.asp, fuel: state.fuel,
   }));
 }
 function restorePrefs() {
@@ -999,6 +1231,7 @@ function restorePrefs() {
     if (p.gs != null) state.gs = p.gs;
     if (p.visible) Object.assign(state.visible, p.visible);
     if (p.asp) Object.assign(state.asp, p.asp);
+    if (p.fuel) Object.assign(state.fuel, p.fuel);
     if (p.night) { document.body.classList.add('theme-night'); document.body.classList.remove('theme-day'); }
     if (p.mode === 'track') setTimeout(() => setOrientation('track'), 0);
   } catch (_) {}
@@ -1014,7 +1247,9 @@ document.addEventListener('DOMContentLoaded', () => {
   init();
   document.getElementById('magvar').value = state.magvar;
   document.getElementById('gs').value = state.gs;
+  if (state.fuel.burn) document.getElementById('fuel-burn').value = state.fuel.burn;
+  if (state.fuel.onboard) document.getElementById('fuel-onboard').value = state.fuel.onboard;
 });
 
 // デバッグ/テスト用フック
-window.HN = { state, handleFix, directTo, addWaypoint, setOrientation, toggleSim, setActiveWp };
+window.HN = { state, handleFix, directTo, addWaypoint, setOrientation, toggleSim, setActiveWp, fetchWx, fetchHazards, renderWx };
