@@ -24,6 +24,7 @@
   --sym-apt: #b03a94;      /* 非管制空港・NDB (マゼンタ) */
   --sym-heli: #4a6a8f;
   --sym-hosp: #dd3344;
+  --sym-er2: #c98a95;
   --sym-nav: #37478f;
 }
 body.theme-day {
@@ -43,6 +44,7 @@ body.theme-night {
   --sym-apt: #dd74c4;
   --sym-heli: #8fb2d6;
   --sym-hosp: #ff6070;
+  --sym-er2: #b98a97;
   --sym-nav: #8e9ff0;
 }
 

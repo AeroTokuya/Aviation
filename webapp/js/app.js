@@ -209,7 +209,9 @@ async function loadAllData() {
 }
 
 // 大量地物のレイヤーは、表示範囲＋最小ズームでマーカーを間引く(コックピットで見やすく・軽量に)
-const GATED = { heliports: 9 };
+const GATED = { heliports: 7 };
+// ヘリポート/病院の重要度: 表示優先順位とズーム閾値
+const HELI_PRIORITY = { drheli: 0, public: 1, er3: 2, er2: 3, heliport: 4 };
 
 function renderLayer(name) {
   const grp = state.layers[name];
@@ -230,11 +232,14 @@ function renderLayer(name) {
       const c = f.geometry && f.geometry.coordinates;
       return c && b.contains([c[1], c[0]]);
     });
-    // ズーム 13 未満は病院ヘリパッドのみ表示(密集地の視認性優先)
-    if (name === 'heliports' && z < 13) list = list.filter(f => f.properties.type === 'hospital');
-    // 描画上限(安全弁)。病院ヘリパッドを優先表示。
+    // ズーム段階デクラッタ: 広域=基地病院・公共用のみ → 三次救急 → 全部
+    if (name === 'heliports') {
+      if (z < 11) list = list.filter(f => ['drheli', 'public'].includes(f.properties.cat));
+      else if (z < 13) list = list.filter(f => ['drheli', 'public', 'er3'].includes(f.properties.cat));
+    }
+    // 描画上限(安全弁)。重要度順に優先表示。
     if (list.length > 400) {
-      list.sort((a, z2) => (a.properties.type === 'hospital' ? 0 : 1) - (z2.properties.type === 'hospital' ? 0 : 1));
+      list.sort((a, b) => (HELI_PRIORITY[a.properties.cat] ?? 9) - (HELI_PRIORITY[b.properties.cat] ?? 9));
       list = list.slice(0, 400);
     }
   }
@@ -351,16 +356,40 @@ const SYM = {
       <rect x="10.8" y="${12 - r + 1.6}" width="2.4" height="${(r - 1.6) * 2}" rx="1.1" fill="${col}" transform="rotate(45 12 12)"/>
     </svg>`;
   },
-  heliport() {
+  heliport(p) {
+    if (p && p.cat === 'public') {
+      // 公共用ヘリポート: 塗りつぶし+白H で強調
+      return `<svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="8" fill="var(--sym-heli)" stroke="#fff" stroke-width="1.6"/>
+        <path d="M9.2 8.4v7.2M14.8 8.4v7.2M9.2 12h5.6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      </svg>`;
+    }
     return `<svg viewBox="0 0 24 24" class="sym-sm">
       <circle cx="12" cy="12" r="7" fill="var(--sym-bg)" stroke="var(--sym-heli)" stroke-width="1.8"/>
       <path d="M9.4 8.5v7M14.6 8.5v7M9.4 12h5.2" stroke="var(--sym-heli)" stroke-width="1.9" stroke-linecap="round"/>
     </svg>`;
   },
-  hospital() {
-    return `<svg viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="7.5" fill="var(--sym-bg)" stroke="var(--sym-hosp)" stroke-width="1.9"/>
-      <path d="M9.2 8.4v7.2M14.8 8.4v7.2M9.2 12h5.6" stroke="var(--sym-hosp)" stroke-width="2" stroke-linecap="round"/>
+  hospital(p) {
+    const cat = (p && p.cat) || 'er2';
+    if (cat === 'drheli') {
+      // ドクターヘリ基地病院: 赤の塗りつぶし+白H+ローターを示す上棒
+      return `<svg viewBox="0 0 24 24" class="sym-lg">
+        <circle cx="12" cy="12" r="8.6" fill="var(--sym-hosp)" stroke="#fff" stroke-width="1.7"/>
+        <path d="M9 8.6v6.8M15 8.6v6.8M9 12h6" stroke="#fff" stroke-width="2.1" stroke-linecap="round"/>
+        <path d="M5.5 4.5 L18.5 4.5" stroke="var(--sym-hosp)" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 4.5v2.4" stroke="var(--sym-hosp)" stroke-width="2"/>
+      </svg>`;
+    }
+    if (cat === 'er3') {
+      return `<svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="7.5" fill="var(--sym-bg)" stroke="var(--sym-hosp)" stroke-width="2"/>
+        <path d="M9.2 8.4v7.2M14.8 8.4v7.2M9.2 12h5.6" stroke="var(--sym-hosp)" stroke-width="2" stroke-linecap="round"/>
+      </svg>`;
+    }
+    // er2: 控えめな細線・小サイズ
+    return `<svg viewBox="0 0 24 24" class="sym-sm">
+      <circle cx="12" cy="12" r="7" fill="var(--sym-bg)" stroke="var(--sym-er2)" stroke-width="1.5"/>
+      <path d="M9.4 8.6v6.8M14.6 8.6v6.8M9.4 12h5.2" stroke="var(--sym-er2)" stroke-width="1.7" stroke-linecap="round"/>
     </svg>`;
   },
   obstacle(p) {
@@ -390,15 +419,19 @@ function facilityIcon(f) {
   const svg = (SYM[t] || SYM.airport)(p);
   // 地図回転を打ち消すラッパー(.mk-rot)にシンボル＋識別ラベルを入れる。
   // 見た目は小さく、タップ領域は 40px 確保。
-  const id = (t === 'airport' || t === 'navaid') && p.ident ? `<div class="mk-id">${escapeHtml(p.ident)}</div>` : '';
+  let id = '';
+  if ((t === 'airport' || t === 'navaid') && p.ident) id = escapeHtml(p.ident);
+  else if (p.cat === 'drheli') id = escapeHtml(p.name_jp || 'DRヘリ');
+  else if (p.cat === 'public') id = escapeHtml(String(p.name || '').replace(/\s*Heliport\s*$/i, ''));
+  const idHtml = id ? `<div class="mk-id">${id}</div>` : '';
   return L.divIcon({
     className: '', iconSize: [40, 40], iconAnchor: [20, 20],
-    html: `<div class="mk-rot"><div class="mk">${svg}</div>${id}</div>`,
+    html: `<div class="mk-rot"><div class="mk">${svg}</div>${idHtml}</div>`,
   });
 }
 // 検索/NRST 結果行用の小型シンボル
-function listSym(type) {
-  const p = type === 'airport' ? { freqs: { TWR: 1 } } : {};
+function listSym(type, cat) {
+  const p = type === 'airport' ? { freqs: { TWR: 1 } } : { cat };
   return `<span class="res-ic">${(SYM[type] || SYM.airport)(p)}</span>`;
 }
 
@@ -558,7 +591,7 @@ function openFacility(f) {
   }
   if (p.elev_ft != null) rows.push(['標高', p.elev_ft.toLocaleString() + ' ft']);
   if (p.rwy_ft != null) rows.push(['滑走路', `${p.rwy_ft.toLocaleString()} ft` + (p.rwy ? ` (RWY ${p.rwy})` : '') + (p.rwy_cnt > 1 ? ` ×${p.rwy_cnt}` : '')]);
-  if (p.cat) rows.push(['区分', p.cat]);
+  if (p.cat) rows.push(['区分', catLabel(p)]);
   if (p.note) rows.push(['備考', p.note]);
   rows.push(['座標', `${lat.toFixed(4)}, ${lon.toFixed(4)}`]);
 
@@ -579,9 +612,14 @@ function openFacility(f) {
     ? `<div class="sheet-warn">⚠️ 周波数・位置はオープンデータ(OurAirports)由来で、日本の航法無線施設は再編により<b>古い/相違の可能性</b>があります。必ず最新の AIP Japan で照合してください。</div>`
     : '';
   const wx = p.type === 'airport' ? wxBlock(p.ident) : '';
+  const hospWarn = p.cat === 'drheli'
+    ? `<div class="sheet-warn">🚁 <b>ドクターヘリ基地病院</b>(概略リストによる)。基地指定・常駐状況は年度で変わるため、最新情報を確認してください。${p.approx ? '<b>位置は概略</b>です。' : ''}</div>`
+    : (p.cat === 'er3' || p.cat === 'er2')
+      ? `<div class="sheet-warn">ℹ️ 救急区分は名称からの<b>推定</b>です。受入体制は必ず事前確認してください。</div>`
+      : '';
   document.getElementById('sheet-body').innerHTML = `
-    <div class="sheet-title">${escapeHtml(title)}</div>
-    <div class="sheet-sub">${escapeHtml(p.name_en || typeLabel(p.type))}</div>
+    <div class="sheet-title">${p.cat === 'drheli' ? '🚁 ' : ''}${escapeHtml(p.name_jp && p.name_jp !== title ? `${p.name_jp}` : title)}</div>
+    <div class="sheet-sub">${escapeHtml(p.cat ? catLabel(p) : (p.name_en || typeLabel(p.type)))}${p.name_jp && p.name_jp !== title ? ' · ' + escapeHtml(title) : ''}</div>
     ${fromOwn}
     ${wx}
     <div class="sheet-cols">
@@ -589,6 +627,7 @@ function openFacility(f) {
       ${rwyDiagram(p)}
     </div>
     ${warn}
+    ${hospWarn}
     <div class="sheet-actions">
       <button class="btn-primary" id="sheet-direct">D→ ダイレクト</button>
       <button class="btn-ghost" id="sheet-add">＋ ルートに追加</button>
@@ -600,7 +639,18 @@ function openFacility(f) {
   document.getElementById('sheet-close').onclick = closeSheet;
 }
 function typeLabel(t) {
-  return { airport: '空港', heliport: 'ヘリポート', hospital: 'ドクターヘリ基地病院', navaid: '航法無線施設' }[t] || '';
+  return { airport: '空港', heliport: 'ヘリポート', hospital: '病院ヘリパッド', navaid: '航法無線施設' }[t] || '';
+}
+// ヘリポート/病院の区分ラベル
+const CAT_LABELS = {
+  drheli: 'ドクターヘリ基地病院',
+  er3: '三次救急相当 (推定)',
+  er2: '二次救急相当 (推定)',
+  public: '公共用ヘリポート',
+  heliport: 'ヘリポート',
+};
+function catLabel(p) {
+  return CAT_LABELS[p.cat] || (p.cat ? String(p.cat) : typeLabel(p.type));
 }
 function closeSheet() { document.getElementById('sheet').classList.add('hidden'); }
 
@@ -903,9 +953,10 @@ function buildSearchIndex() {
     const p = f.properties || {};
     const [lon, lat] = f.geometry.coordinates;
     idx.push({
-      lat, lon, type,
-      ident: p.ident || '', iata: p.iata || '', name: p.name || '', muni: p.muni || '',
-      label: p.ident ? `${p.ident} ${p.name || ''}` : (p.name || ''),
+      lat, lon, type, cat: p.cat || '',
+      ident: p.ident || '', iata: p.iata || '',
+      name: (p.name_jp ? p.name_jp + ' ' : '') + (p.name || ''), muni: p.muni || '',
+      label: p.name_jp || (p.ident ? `${p.ident} ${p.name || ''}` : (p.name || '')),
       f,
     });
   };
@@ -933,14 +984,14 @@ function searchFacilities(q) {
   return scored.slice(0, 25).map(x => x[1]);
 }
 function resultRow(it, ref) {
-  let sub = typeLabel(it.type) + (it.muni ? ' · ' + it.muni : '');
+  let sub = (it.cat ? CAT_LABELS[it.cat] || typeLabel(it.type) : typeLabel(it.type)) + (it.muni ? ' · ' + it.muni : '');
   let right = '';
   if (ref) {
     const nm = haversineNM(ref, it), brg = trueToMag(bearingTrue(ref, it));
     right = `<span class="res-dist">${fmtNM(nm)}<small>NM</small></span><span class="res-brg">${fmtBrg(brg)}°</span>`;
   }
-  return `<div class="res-row" data-lat="${it.lat}" data-lon="${it.lon}" data-name="${escapeHtml(it.ident || it.name)}">
-    ${listSym(it.type)}
+  return `<div class="res-row" data-lat="${it.lat}" data-lon="${it.lon}" data-name="${escapeHtml(it.ident || it.label)}">
+    ${listSym(it.type, it.cat)}
     <span class="res-main"><b>${escapeHtml(it.label)}</b><small>${escapeHtml(sub)}</small></span>
     ${right}
     <span class="res-go">D→</span>
