@@ -1,7 +1,7 @@
 /* HeliNav Service Worker — オフライン対応
  * app-shell: cache-first / OSM tiles: cache-first(+network fill) / data: stale-while-revalidate
  */
-const SHELL = 'helinav-shell-v1';
+const SHELL = 'helinav-shell-v2';
 const TILES = 'helinav-tiles';
 const APP_FILES = [
   './',

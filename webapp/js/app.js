@@ -1,5 +1,8 @@
 /* HeliNav — VFR ヘリコプター ナビ (PWA)
  * 無料・軽量・オフライン対応。Leaflet + OpenStreetMap。
+ * Garmin Pilot / Air Navigation Pro を参考にした飛行中利用向け UI:
+ *   NAVバー(GS/TRK/ALT/BRG/DIST/ETE/XTK)・トラックアップ・自動WPシーケンス・
+ *   Direct-To検索・NRST・Wake Lock。
  * 参考情報のみ。運航判断は公式情報とパイロットが行うこと。
  */
 'use strict';
@@ -17,12 +20,26 @@ const state = {
   visible: { airports: true, heliports: true, navaids: true, hazards: true, route: true },
   data: {},            // layer name -> GeoJSON
   route: [],           // [{lat, lon, name}]
-  routeLine: null,
-  routeMarkers: [],
   routeMode: false,
-  own: { marker: null, latlng: null, heading: null, follow: false },
   magvar: 8,           // 西偏差(°) 日本は約7〜9°W
-  gs: 110,             // 地上速度 kt (ETA用)
+  gs: 110,             // 計画地上速度 kt (GPS 無効時の ETE 用)
+  own: {
+    watchId: null,
+    latlng: null,       // L.LatLng
+    track: null,        // 真トラック(°)。GPS course or 自己計算
+    gsKt: null,         // GPS 対地速度 kt
+    altFt: null,        // GPS 高度 ft
+    accM: null,         // 水平精度 m
+    marker: null,
+    accCircle: null,
+    prev: null,         // {lat, lon, t} トラック自己計算用
+    lastFixT: 0,
+  },
+  nav: { activeIdx: null, arrived: false },  // route[activeIdx] が現在の目標WP
+  view: { mode: 'north', follow: false, rot: 0, rotCont: 0 }, // rot: 画面回転角(deg, 連続値)
+  sim: { active: false, timer: null, distNM: 0 },
+  wake: null,
+  search: [],           // Direct-To 検索インデックス
 };
 
 /* ---------------- 幾何・計算 ---------------- */
@@ -42,9 +59,30 @@ function bearingTrue(a, b) {
   const x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLon);
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
+// from→to のコースに対する pos の横方向偏位 [NM]。正 = コースの右側
+function crossTrackNM(from, to, pos) {
+  const d13 = haversineNM(from, pos) / R_NM;
+  const th13 = toRad(bearingTrue(from, pos));
+  const th12 = toRad(bearingTrue(from, to));
+  return Math.asin(Math.sin(d13) * Math.sin(th13 - th12)) * R_NM;
+}
+// 出発点 a から真方位 brg へ distNM 進んだ地点
+function destPoint(a, brgDeg, distNM) {
+  const d = distNM / R_NM, th = toRad(brgDeg);
+  const la1 = toRad(a.lat), lo1 = toRad(a.lon);
+  const la2 = Math.asin(Math.sin(la1) * Math.cos(d) + Math.cos(la1) * Math.sin(d) * Math.cos(th));
+  const lo2 = lo1 + Math.atan2(Math.sin(th) * Math.sin(d) * Math.cos(la1), Math.cos(d) - Math.sin(la1) * Math.sin(la2));
+  return { lat: toDeg(la2), lon: ((toDeg(lo2) + 540) % 360) - 180 };
+}
+const angDiff = (a, b) => { let d = (a - b) % 360; if (d > 180) d -= 360; if (d < -180) d += 360; return d; };
 const trueToMag = t => (t + state.magvar + 360) % 360;   // 西偏差は真方位に加算
 const fmtBrg = d => String(Math.round(d)).padStart(3, '0');
 const fmtNM = n => n < 10 ? n.toFixed(1) : Math.round(n).toString();
+function fmtETE(min) {
+  if (!isFinite(min) || min < 0) return '--:--';
+  if (min < 60) return `${String(Math.floor(min)).padStart(2, '0')}:${String(Math.round(min % 1 * 60)).padStart(2, '0')}`;
+  return `${Math.floor(min / 60)}h${String(Math.round(min % 60)).padStart(2, '0')}`;
+}
 
 /* ---------------- 起動 ---------------- */
 async function init() {
@@ -53,19 +91,26 @@ async function init() {
   wireUI();
   registerSW();
   await loadAllData();
+  buildSearchIndex();
   updateNetStatus();
   window.addEventListener('online', updateNetStatus);
   window.addEventListener('offline', updateNetStatus);
+  requestWakeLock();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestWakeLock();
+  });
+  startGPS();           // 起動と同時に GPS 取得開始(飛行中に操作不要)
+  updateHUD();
 }
 
 function buildMap() {
-  state.map = L.map('map', { zoomControl: false, tap: true, attributionControl: true })
-    .setView([35.6, 139.7], 8);
-  L.control.zoom({ position: 'bottomleft' }).addTo(state.map);
+  state.map = L.map('map', {
+    zoomControl: false, tap: true, attributionControl: false,
+    fadeAnimation: false,  // 回転時のタイルちらつき防止
+  }).setView([35.6, 139.7], 8);
 
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18, crossOrigin: true,
-    attribution: '&copy; OpenStreetMap contributors',
   }).addTo(state.map);
 
   for (const name of Object.keys(DATA_FILES)) state.layers[name] = L.layerGroup().addTo(state.map);
@@ -78,8 +123,19 @@ function buildMap() {
     clearTimeout(gateTimer);
     gateTimer = setTimeout(() => {
       for (const name of Object.keys(GATED)) if (state.visible[name]) renderLayer(name);
+      updateZoomClass();
     }, 120);
   });
+  updateZoomClass();
+  // 手動パンで追従解除(ノースアップ時のみドラッグ可)
+  state.map.on('dragstart', () => setFollow(false));
+}
+
+// ズームに応じたデクラッタ: 広域ではマーカーを縮小・識別ラベル非表示
+function updateZoomClass() {
+  const z = state.map.getZoom();
+  document.body.classList.toggle('show-ids', z >= 9);
+  document.body.classList.toggle('z-lo', z <= 10);
 }
 
 /* ---------------- データ読込・描画 ---------------- */
@@ -98,7 +154,7 @@ async function loadAllData() {
 }
 
 // 大量地物のレイヤーは、表示範囲＋最小ズームでマーカーを間引く(コックピットで見やすく・軽量に)
-const GATED = { heliports: 8 };
+const GATED = { heliports: 9 };
 
 function renderLayer(name) {
   const grp = state.layers[name];
@@ -117,8 +173,8 @@ function renderLayer(name) {
       const c = f.geometry && f.geometry.coordinates;
       return c && b.contains([c[1], c[0]]);
     });
-    // ズーム 11 未満は病院ヘリパッドのみ表示(密集地の視認性優先)
-    if (name === 'heliports' && z < 11) list = list.filter(f => f.properties.type === 'hospital');
+    // ズーム 12 未満は病院ヘリパッドのみ表示(密集地の視認性優先)
+    if (name === 'heliports' && z < 12) list = list.filter(f => f.properties.type === 'hospital');
     // 描画上限(安全弁)。病院ヘリパッドを優先表示。
     if (list.length > 400) {
       list.sort((a, z2) => (a.properties.type === 'hospital' ? 0 : 1) - (z2.properties.type === 'hospital' ? 0 : 1));
@@ -157,12 +213,15 @@ const ICONS = {
   airport: '✈️', heliport: '🚁', hospital: '🏥', navaid: '📡',
 };
 function facilityIcon(f) {
-  const t = (f.properties && f.properties.type) || 'airport';
+  const p = f.properties || {};
+  const t = p.type || 'airport';
   const glyph = ICONS[t] || '•';
   const cls = t === 'hospital' ? 'hospital' : t;
+  // 地図回転を打ち消すラッパー(.mk-rot)にアイコン＋識別ラベルを入れる
+  const id = (t === 'airport' || t === 'navaid') && p.ident ? `<div class="mk-id">${escapeHtml(p.ident)}</div>` : '';
   return L.divIcon({
     className: '', iconSize: [34, 34], iconAnchor: [17, 17],
-    html: `<div class="mk ${cls}">${glyph}</div>`,
+    html: `<div class="mk-rot"><div class="mk ${cls}">${glyph}</div>${id}</div>`,
   });
 }
 
@@ -196,7 +255,7 @@ function openFacility(f) {
     const a = { lat: state.own.latlng.lat, lon: state.own.latlng.lng };
     const b = { lat, lon };
     const nm = haversineNM(a, b), brg = bearingTrue(a, b);
-    fromOwn = `<div class="sheet-sub">現在地から: <b>${fmtNM(nm)} NM</b> / 真 ${fmtBrg(brg)}° (磁 ${fmtBrg(trueToMag(brg))}°)</div>`;
+    fromOwn = `<div class="sheet-sub">現在地から: <b>${fmtNM(nm)} NM</b> / 磁 ${fmtBrg(trueToMag(brg))}° (真 ${fmtBrg(brg)}°)</div>`;
   }
 
   const kv = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('');
@@ -210,13 +269,13 @@ function openFacility(f) {
     <dl class="kv">${kv}</dl>
     ${warn}
     <div class="sheet-actions">
-      <button class="btn-primary" id="sheet-add">＋ ルートに追加</button>
-      <button class="btn-ghost" id="sheet-direct">→ ダイレクト</button>
+      <button class="btn-primary" id="sheet-direct">D→ ダイレクト</button>
+      <button class="btn-ghost" id="sheet-add">＋ ルートに追加</button>
       <button class="btn-ghost" id="sheet-close">閉じる</button>
     </div>`;
   document.getElementById('sheet').classList.remove('hidden');
-  document.getElementById('sheet-add').onclick = () => { addWaypoint(lat, lon, title); closeSheet(); };
-  document.getElementById('sheet-direct').onclick = () => { directTo(lat, lon, title); closeSheet(); };
+  document.getElementById('sheet-add').onclick = () => { addWaypoint(lat, lon, p.ident || title); closeSheet(); };
+  document.getElementById('sheet-direct').onclick = () => { directTo(lat, lon, p.ident || title); closeSheet(); };
   document.getElementById('sheet-close').onclick = closeSheet;
 }
 function typeLabel(t) {
@@ -224,42 +283,68 @@ function typeLabel(t) {
 }
 function closeSheet() { document.getElementById('sheet').classList.add('hidden'); }
 
-/* ---------------- ルート ---------------- */
+/* ---------------- ルート・アクティブレグ ---------------- */
 function onMapClick(e) {
   if (!state.routeMode) return;
-  addWaypoint(e.latlng.lat, e.latlng.lng, 'WP');
+  const ll = correctedLatLng(e);
+  addWaypoint(ll.lat, ll.lng, 'WP' + (state.route.length + 1));
+}
+// トラックアップ(回転)中は Leaflet の座標変換が回転を知らないため補正する
+function correctedLatLng(e) {
+  const rot = state.view.rot;
+  if (!rot || !e.originalEvent) return e.latlng;
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2 + currentShiftPx();
+  const dx = e.originalEvent.clientX - cx, dy = e.originalEvent.clientY - cy;
+  const a = toRad(-rot);
+  const ux = dx * Math.cos(a) - dy * Math.sin(a);
+  const uy = dx * Math.sin(a) + dy * Math.cos(a);
+  const size = state.map.getSize();
+  return state.map.containerPointToLatLng([size.x / 2 + ux, size.y / 2 + uy]);
 }
 function addWaypoint(lat, lon, name) {
   state.route.push({ lat, lon, name });
+  if (state.nav.activeIdx == null && state.route.length >= 2) setActiveWp(1);
   redrawRoute();
   openRoutebar();
   showToast('ウェイポイント追加: ' + name);
 }
 function directTo(lat, lon, name) {
-  if (!state.own.latlng) { showToast('現在地が未取得です'); return; }
-  state.route = [
-    { lat: state.own.latlng.lat, lon: state.own.latlng.lng, name: '現在地' },
-    { lat, lon, name },
-  ];
+  const from = state.own.latlng
+    ? { lat: state.own.latlng.lat, lon: state.own.latlng.lng, name: '現在地' }
+    : (() => { const c = state.map.getCenter(); return { lat: c.lat, lon: c.lng, name: '地図中心' }; })();
+  state.route = [from, { lat, lon, name }];
+  setActiveWp(1);
   redrawRoute();
   openRoutebar();
+  showToast('D→ ' + name);
+  if (state.own.latlng) setFollow(true);
+}
+function setActiveWp(i) {
+  state.nav.activeIdx = i;
+  state.nav.arrived = false;
+  redrawRoute();
+  updateHUD();
 }
 function redrawRoute() {
   const grp = state.layers.route;
   grp.clearLayers();
-  state.routeMarkers = [];
-  const pts = state.route.map(w => [w.lat, w.lon]);
-  if (pts.length >= 2) {
-    L.polyline(pts, { color: '#35c2ff', weight: 4, opacity: 0.9 }).addTo(grp);
+  const act = state.nav.activeIdx;
+  // レグごとに描画: アクティブレグ=マゼンタ(太)、それ以外=シアン
+  for (let i = 1; i < state.route.length; i++) {
+    const a = state.route[i - 1], b = state.route[i];
+    const active = i === act;
+    L.polyline([[a.lat, a.lon], [b.lat, b.lon]], {
+      color: active ? '#ff3ec8' : '#35c2ff', weight: active ? 6 : 4, opacity: active ? 1 : 0.85,
+    }).addTo(grp);
   }
   state.route.forEach((w, i) => {
+    const cls = i === act ? 'wp-marker active' : 'wp-marker';
     const m = L.marker([w.lat, w.lon], {
-      icon: L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 15], html: `<div class="wp-marker">${i + 1}</div>` }),
+      icon: L.divIcon({ className: '', iconSize: [34, 34], iconAnchor: [17, 17], html: `<div class="mk-rot"><div class="${cls}">${i + 1}</div><div class="mk-id">${escapeHtml(w.name)}</div></div>` }),
       draggable: true,
     }).addTo(grp);
-    m.on('dragend', ev => { const ll = ev.target.getLatLng(); w.lat = ll.lat; w.lon = ll.lng; redrawRoute(); });
+    m.on('dragend', ev => { const ll = ev.target.getLatLng(); w.lat = ll.lat; w.lon = ll.lng; redrawRoute(); updateHUD(); });
     m.on('click', ev => { L.DomEvent.stop(ev); });
-    state.routeMarkers.push(m);
   });
   updateRoutebar();
 }
@@ -267,56 +352,348 @@ function updateRoutebar() {
   const legsEl = document.getElementById('rb-legs');
   let total = 0;
   const rows = [];
+  const gsEff = effectiveGS();
   for (let i = 1; i < state.route.length; i++) {
     const a = state.route[i - 1], b = state.route[i];
     const nm = haversineNM(a, b), brg = bearingTrue(a, b);
     total += nm;
-    const eta = state.gs > 0 ? (nm / state.gs) * 60 : 0;
-    rows.push(`<div class="leg">
-      <span class="num">${i}</span>
+    const ete = gsEff > 0 ? (nm / gsEff) * 60 : Infinity;
+    const active = i === state.nav.activeIdx;
+    rows.push(`<div class="leg${active ? ' leg-active' : ''}" data-act="${i}">
+      <span class="num">${active ? '▶' : i}</span>
       <span class="name">${escapeHtml(a.name)} → ${escapeHtml(b.name)}</span>
       <span class="brg">磁 ${fmtBrg(trueToMag(brg))}°</span>
-      <span class="nm">${fmtNM(nm)}NM · ${Math.round(eta)}分</span>
+      <span class="nm">${fmtNM(nm)}NM · ${fmtETE(ete)}</span>
       <button class="del" data-i="${i}">×</button>
     </div>`);
   }
   legsEl.innerHTML = rows.join('') || '<div class="rb-hint">ウェイポイントが2点以上でルートを表示します。</div>';
-  legsEl.querySelectorAll('.del').forEach(btn => btn.onclick = () => { state.route.splice(+btn.dataset.i, 1); redrawRoute(); });
-  const etaTot = state.gs > 0 ? (total / state.gs) * 60 : 0;
+  legsEl.querySelectorAll('.del').forEach(btn => btn.onclick = ev => {
+    ev.stopPropagation();
+    const i = +btn.dataset.i;
+    state.route.splice(i, 1);
+    if (state.nav.activeIdx != null) {
+      if (state.route.length < 2) state.nav.activeIdx = null;
+      else if (state.nav.activeIdx >= state.route.length) state.nav.activeIdx = state.route.length - 1;
+      else if (i < state.nav.activeIdx) state.nav.activeIdx--;
+    }
+    redrawRoute(); updateHUD();
+  });
+  legsEl.querySelectorAll('.leg').forEach(el => el.onclick = () => setActiveWp(+el.dataset.act));
+  const etaTot = gsEff > 0 ? (total / gsEff) * 60 : Infinity;
   document.getElementById('rb-summary').textContent =
-    state.route.length >= 2 ? `全長 ${fmtNM(total)} NM · ${state.route.length - 1}区間 · ${Math.round(etaTot)}分@${state.gs}kt` : '地図/施設をタップ';
+    state.route.length >= 2 ? `全長 ${fmtNM(total)} NM · ${state.route.length - 1}区間 · ${fmtETE(etaTot)} @${Math.round(gsEff)}kt` : '地図/施設をタップ';
 }
 function openRoutebar() { document.getElementById('routebar').classList.remove('hidden'); }
-function clearRoute() { state.route = []; redrawRoute(); }
+function clearRoute() { state.route = []; state.nav.activeIdx = null; redrawRoute(); updateHUD(); }
 
-/* ---------------- 現在地 ---------------- */
-function locate() {
-  if (!navigator.geolocation) { showToast('位置情報が使えません'); return; }
-  setGpsStatus('取得中…');
-  navigator.geolocation.watchPosition(onPos, err => {
-    setGpsStatus('GPS ✕', false);
-    showToast('位置取得エラー: ' + err.message);
-  }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
-  state.own.follow = true;
+// ETE 計算に使う速度: GPS の実測 GS(20kt以上) > 計画速度
+function effectiveGS() {
+  return (state.own.gsKt != null && state.own.gsKt >= 20) ? state.own.gsKt : state.gs;
+}
+
+// WP 自動シーケンス: 0.3NM 以内 or 通過(コースに対し WP が後方) で次レグへ
+function checkSequence() {
+  const i = state.nav.activeIdx;
+  if (i == null || !state.own.latlng || i >= state.route.length) return;
+  const pos = { lat: state.own.latlng.lat, lon: state.own.latlng.lng };
+  const wp = state.route[i];
+  const dist = haversineNM(pos, wp);
+  const from = state.route[i - 1];
+  const course = bearingTrue(from, wp);
+  const passed = dist < 3 && Math.abs(angDiff(bearingTrue(pos, wp), course)) > 110;
+  if (dist < 0.3 || passed) {
+    if (i + 1 < state.route.length) {
+      setActiveWp(i + 1);
+      showToast('▶ 次のWP: ' + state.route[i + 1].name);
+    } else if (!state.nav.arrived) {
+      state.nav.arrived = true;
+      showToast('🏁 最終WP ' + wp.name + ' に到達');
+    }
+  }
+}
+
+/* ---------------- GPS・自機 ---------------- */
+function startGPS() {
+  if (!navigator.geolocation) { setGpsDot(false); showToast('位置情報が使えません'); return; }
+  if (state.own.watchId != null) return;   // 多重 watch 防止
+  state.own.watchId = navigator.geolocation.watchPosition(onPos, err => {
+    setGpsDot(false);
+    if (err.code === err.PERMISSION_DENIED) showToast('位置情報が許可されていません');
+  }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
 }
 function onPos(pos) {
-  const { latitude, longitude, heading, speed } = pos.coords;
-  const ll = L.latLng(latitude, longitude);
-  state.own.latlng = ll;
-  if (heading != null && !isNaN(heading)) state.own.heading = heading;
+  if (state.sim.active) return;   // デモ飛行中は実GPSを無視
+  const c = pos.coords;
+  handleFix({
+    lat: c.latitude, lon: c.longitude,
+    gsKt: (c.speed != null && !isNaN(c.speed)) ? c.speed * 1.94384 : null,
+    heading: (c.heading != null && !isNaN(c.heading)) ? c.heading : null,
+    altFt: (c.altitude != null && !isNaN(c.altitude)) ? c.altitude * 3.28084 : null,
+    accM: c.accuracy, t: pos.timestamp || Date.now(),
+  });
+}
+// GPS/シミュレーション共通の測位処理
+function handleFix(fix) {
+  const own = state.own;
+  const cur = { lat: fix.lat, lon: fix.lon, t: fix.t };
+  // トラック: GPS course があり移動中ならそれを、無ければ位置差分から自己計算
+  if (fix.heading != null && (fix.gsKt == null || fix.gsKt > 3)) {
+    own.track = fix.heading;
+  } else if (own.prev) {
+    const d = haversineNM(own.prev, cur);
+    if (d > 0.005) {   // 約9m 以上動いたら更新(静止時のふらつき防止)
+      own.track = bearingTrue(own.prev, cur);
+      if (fix.gsKt == null) {
+        const dtH = (cur.t - own.prev.t) / 3600000;
+        if (dtH > 0) fix.gsKt = d / dtH;
+      }
+    }
+  }
+  if (!own.prev || haversineNM(own.prev, cur) > 0.005) own.prev = cur;
+
+  own.latlng = L.latLng(fix.lat, fix.lon);
+  own.gsKt = fix.gsKt;
+  own.altFt = fix.altFt;
+  own.accM = fix.accM;
+  own.lastFixT = fix.t;
+  setGpsDot(true, fix.accM);
   drawOwnship();
-  const kt = speed != null && !isNaN(speed) ? (speed * 1.94384).toFixed(0) : '--';
-  setGpsStatus(`GS ${kt}kt`, true);
-  if (state.own.follow) state.map.panTo(ll, { animate: true });
+  checkSequence();
+  updateHUD();
+  if (state.view.follow) followView();
 }
 function drawOwnship() {
-  if (!state.own.latlng) return;
-  const hdg = state.own.heading || 0;
-  const html = `<div class="ownship" style="transform:rotate(${hdg}deg)">
-    <svg width="26" height="26" viewBox="0 0 26 26"><path d="M13 1 L23 24 L13 18 L3 24 Z" fill="#35c2ff" stroke="#fff" stroke-width="1.5"/></svg></div>`;
-  const icon = L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html });
-  if (!state.own.marker) state.own.marker = L.marker(state.own.latlng, { icon, interactive: false, zIndexOffset: 1000 }).addTo(state.map);
-  else { state.own.marker.setLatLng(state.own.latlng); state.own.marker.setIcon(icon); }
+  const own = state.own;
+  if (!own.latlng) return;
+  // 画面上の機首角 = トラック + 地図回転角
+  const scr = ((own.track || 0) + state.view.rot) % 360;
+  const html = `<div class="ownship" style="transform:rotate(${scr}deg)">
+    <svg width="34" height="34" viewBox="0 0 26 26"><path d="M13 1 L23 24 L13 18 L3 24 Z" fill="#35c2ff" stroke="#fff" stroke-width="1.5"/></svg></div>`;
+  const icon = L.divIcon({ className: '', iconSize: [34, 34], iconAnchor: [17, 17], html });
+  if (!own.marker) own.marker = L.marker(own.latlng, { icon, interactive: false, zIndexOffset: 1000 }).addTo(state.map);
+  else { own.marker.setLatLng(own.latlng); own.marker.setIcon(icon); }
+  if (own.accM != null && own.accM > 30) {
+    if (!own.accCircle) own.accCircle = L.circle(own.latlng, { radius: own.accM, weight: 1, color: '#35c2ff', opacity: .5, fillOpacity: .06, interactive: false }).addTo(state.map);
+    else { own.accCircle.setLatLng(own.latlng); own.accCircle.setRadius(own.accM); }
+  } else if (own.accCircle) { state.map.removeLayer(own.accCircle); own.accCircle = null; }
+}
+
+/* ---------------- ビュー(追従・トラックアップ) ---------------- */
+const maprotEl = () => document.getElementById('maprot');
+function currentShiftPx() {
+  // トラックアップ時は自機を画面下 1/3 に置き前方を広く見せる
+  return state.view.mode === 'track' ? Math.round(window.innerHeight * 0.18) : 0;
+}
+function setFollow(on) {
+  state.view.follow = on;
+  document.getElementById('btn-locate').classList.toggle('active', on);
+  if (on) followView();
+}
+function followView() {
+  const own = state.own;
+  if (!own.latlng) return;
+  state.map.setView(own.latlng, state.map.getZoom(), { animate: false });
+  if (state.view.mode === 'track' && own.track != null) applyRotation(-own.track);
+}
+function applyRotation(deg) {
+  // 連続角で保持し 359→0 の逆回転を防ぐ
+  state.view.rotCont += angDiff(deg, ((state.view.rotCont % 360) + 360) % 360);
+  state.view.rot = ((state.view.rotCont % 360) + 360) % 360;
+  maprotEl().style.transform = `translateY(${currentShiftPx()}px) rotate(${state.view.rotCont}deg)`;
+  document.documentElement.style.setProperty('--crot', `${-state.view.rotCont}deg`);
+  drawOwnship();
+}
+function setOrientation(mode) {
+  state.view.mode = mode;
+  const btn = document.getElementById('btn-orient');
+  const track = mode === 'track';
+  btn.textContent = track ? 'TRK↑' : 'N↑';
+  btn.classList.toggle('active', track);
+  document.body.classList.toggle('trackup', track);
+  // トラックアップ中はジェスチャを無効化(回転座標系で誤動作するため)。ズームは大ボタンで。
+  const m = state.map;
+  if (track) {
+    m.dragging.disable(); m.touchZoom.disable(); m.doubleClickZoom.disable(); m.scrollWheelZoom.disable();
+  } else {
+    m.dragging.enable(); m.touchZoom.enable(); m.doubleClickZoom.enable(); m.scrollWheelZoom.enable();
+  }
+  m.invalidateSize({ pan: false });
+  if (track) {
+    setFollow(true);
+    applyRotation(state.own.track != null ? -state.own.track : 0);
+  } else {
+    applyRotation(0);
+    maprotEl().style.transform = '';
+    if (state.view.follow) followView();
+  }
+  savePrefs();
+}
+
+/* ---------------- NAVバー(HUD) ---------------- */
+function updateHUD() {
+  const own = state.own;
+  const set = (id, v) => { document.getElementById(id).textContent = v; };
+  set('hud-gs', own.gsKt != null ? String(Math.round(own.gsKt)) : '--');
+  set('hud-trk', own.track != null ? fmtBrg(trueToMag(own.track)) : '---');
+  set('hud-alt', own.altFt != null ? String(Math.round(own.altFt)) : '----');
+
+  const i = state.nav.activeIdx;
+  const hasNav = i != null && i < state.route.length;
+  const wpEl = document.getElementById('hud-wpname');
+  if (!hasNav) {
+    set('hud-wpname', '-----'); set('hud-brg', '---'); set('hud-dist', '--');
+    set('hud-ete', '--:--'); set('hud-xtk', '--');
+    wpEl.classList.remove('mag');
+    return;
+  }
+  const wp = state.route[i];
+  set('hud-wpname', wp.name);
+  wpEl.classList.add('mag');
+  const ref = own.latlng ? { lat: own.latlng.lat, lon: own.latlng.lng } : null;
+  if (!ref) { set('hud-brg', '---'); set('hud-dist', '--'); set('hud-ete', '--:--'); set('hud-xtk', '--'); return; }
+  const dist = haversineNM(ref, wp);
+  const brg = bearingTrue(ref, wp);
+  set('hud-brg', fmtBrg(trueToMag(brg)));
+  set('hud-dist', fmtNM(dist));
+  const gsEff = effectiveGS();
+  set('hud-ete', fmtETE(gsEff > 0 ? dist / gsEff * 60 : Infinity));
+  // XTK: アクティブレグからの偏位。L/R = コースのどちら側に居るか
+  const from = state.route[i - 1];
+  const xtk = crossTrackNM(from, wp, ref);
+  set('hud-xtk', Math.abs(xtk) < 0.05 ? '0.0' : `${Math.abs(xtk).toFixed(1)} ${xtk > 0 ? 'R' : 'L'}`);
+}
+
+/* ---------------- Direct-To 検索・NRST ---------------- */
+function buildSearchIndex() {
+  const idx = [];
+  const push = (f, type) => {
+    const p = f.properties || {};
+    const [lon, lat] = f.geometry.coordinates;
+    idx.push({
+      lat, lon, type,
+      ident: p.ident || '', iata: p.iata || '', name: p.name || '', muni: p.muni || '',
+      label: p.ident ? `${p.ident} ${p.name || ''}` : (p.name || ''),
+      f,
+    });
+  };
+  for (const f of (state.data.airports?.features || [])) push(f, 'airport');
+  for (const f of (state.data.navaids?.features || [])) push(f, 'navaid');
+  for (const f of (state.data.heliports?.features || [])) push(f, f.properties.type === 'hospital' ? 'hospital' : 'heliport');
+  state.search = idx;
+}
+function searchFacilities(q) {
+  q = q.trim().toLowerCase();
+  if (!q) return [];
+  const scored = [];
+  for (const it of state.search) {
+    const ident = it.ident.toLowerCase(), iata = it.iata.toLowerCase();
+    const name = it.name.toLowerCase(), muni = it.muni.toLowerCase();
+    let s = -1;
+    if (ident === q || iata === q) s = 100;
+    else if (ident.startsWith(q) || iata.startsWith(q)) s = 80;
+    else if (name.startsWith(q)) s = 60;
+    else if (name.includes(q)) s = 40;
+    else if (muni.includes(q)) s = 20;
+    if (s >= 0) scored.push([s + (it.type === 'airport' ? 5 : 0), it]);
+  }
+  scored.sort((a, b) => b[0] - a[0]);
+  return scored.slice(0, 25).map(x => x[1]);
+}
+function resultRow(it, ref) {
+  let sub = typeLabel(it.type) + (it.muni ? ' · ' + it.muni : '');
+  let right = '';
+  if (ref) {
+    const nm = haversineNM(ref, it), brg = trueToMag(bearingTrue(ref, it));
+    right = `<span class="res-dist">${fmtNM(nm)}<small>NM</small></span><span class="res-brg">${fmtBrg(brg)}°</span>`;
+  }
+  return `<div class="res-row" data-lat="${it.lat}" data-lon="${it.lon}" data-name="${escapeHtml(it.ident || it.name)}">
+    <span class="res-ic">${ICONS[it.type] || '•'}</span>
+    <span class="res-main"><b>${escapeHtml(it.label)}</b><small>${escapeHtml(sub)}</small></span>
+    ${right}
+    <span class="res-go">D→</span>
+  </div>`;
+}
+function ownRef() {
+  return state.own.latlng ? { lat: state.own.latlng.lat, lon: state.own.latlng.lng } : null;
+}
+function renderDirectResults() {
+  const q = document.getElementById('direct-q').value;
+  const list = searchFacilities(q);
+  const ref = ownRef();
+  const el = document.getElementById('direct-results');
+  el.innerHTML = list.map(it => resultRow(it, ref)).join('') ||
+    (q.trim() ? '<div class="rb-hint">該当なし</div>' : '<div class="rb-hint">識別コード(RJTT)・名称(羽田)・所在地で検索</div>');
+  wireResultRows(el, () => closePanel('direct'));
+}
+let nrstKind = 'airport';
+function renderNrst() {
+  const ref = ownRef() || (() => { const c = state.map.getCenter(); return { lat: c.lat, lon: c.lng }; })();
+  const pool = state.search.filter(it => nrstKind === 'airport'
+    ? it.type === 'airport'
+    : (it.type === 'heliport' || it.type === 'hospital'));
+  const list = pool
+    .map(it => [haversineNM(ref, it), it])
+    .sort((a, b) => a[0] - b[0])
+    .slice(0, 15)
+    .map(x => x[1]);
+  const el = document.getElementById('nrst-results');
+  el.innerHTML = list.map(it => resultRow(it, ref)).join('') || '<div class="rb-hint">データなし</div>';
+  if (!ownRef()) el.insertAdjacentHTML('afterbegin', '<div class="rb-hint">⚠ GPS 未取得のため地図中心からの距離です</div>');
+  wireResultRows(el, () => closePanel('nrst'));
+}
+function wireResultRows(el, close) {
+  el.querySelectorAll('.res-row').forEach(row => {
+    row.onclick = () => {
+      directTo(+row.dataset.lat, +row.dataset.lon, row.dataset.name);
+      close();
+    };
+  });
+}
+function openPanel(id) {
+  for (const p of ['direct', 'nrst', 'sheet', 'menu']) if (p !== id) document.getElementById(p).classList.add('hidden');
+  document.getElementById(id).classList.remove('hidden');
+}
+function closePanel(id) { document.getElementById(id).classList.add('hidden'); }
+
+/* ---------------- デモ飛行(シミュレーション) ---------------- */
+function toggleSim() {
+  if (state.sim.active) return stopSim();
+  if (state.route.length < 2) { showToast('先にルートを作成してください(2点以上)'); return; }
+  state.sim.active = true;
+  state.sim.distNM = 0;
+  if (state.nav.activeIdx == null) setActiveWp(1);
+  const start = state.route[0];
+  setFollow(true);
+  showToast('🛰️ デモ飛行開始 (' + Math.round(state.gs) + 'kt)');
+  let pos = { lat: start.lat, lon: start.lon };
+  let t = Date.now();
+  state.sim.timer = setInterval(() => {
+    const i = Math.min(state.nav.activeIdx ?? 1, state.route.length - 1);
+    const wp = state.route[i];
+    const brg = bearingTrue(pos, wp);
+    const step = state.gs / 3600;   // 1秒あたりNM
+    pos = destPoint(pos, brg, step);
+    t += 1000;
+    handleFix({ lat: pos.lat, lon: pos.lon, gsKt: state.gs, heading: brg, altFt: 1500, accM: 5, t });
+    if (state.nav.arrived) stopSim();
+  }, 1000);
+}
+function stopSim() {
+  clearInterval(state.sim.timer);
+  state.sim.timer = null;
+  state.sim.active = false;
+  showToast('デモ飛行終了');
+}
+
+/* ---------------- Wake Lock(画面スリープ防止) ---------------- */
+async function requestWakeLock() {
+  try {
+    if (!('wakeLock' in navigator)) { setDot('dot-wake', null); return; }
+    state.wake = await navigator.wakeLock.request('screen');
+    setDot('dot-wake', true);
+    state.wake.addEventListener('release', () => setDot('dot-wake', false));
+  } catch (_) { setDot('dot-wake', false); }
 }
 
 /* ---------------- ハザード取得 (OSM Overpass) ---------------- */
@@ -388,6 +765,7 @@ function importGeoJSON(file) {
       state.data[name] = gj;
       localStorage.setItem('heli.data.' + name, JSON.stringify(gj));
       renderLayer(name);
+      buildSearchIndex();
       showToast(`${name} を取込みました (${(gj.features || []).length}件)`);
     } catch (e) { showToast('取込失敗: ' + e.message); }
   };
@@ -415,11 +793,34 @@ function wireUI() {
       else state.map.removeLayer(state.layers[name]);
     };
   });
+  document.getElementById('zoom-in').onclick = () => state.map.zoomIn();
+  document.getElementById('zoom-out').onclick = () => state.map.zoomOut();
   document.getElementById('btn-locate').onclick = () => {
-    state.own.follow = true;
-    if (state.own.latlng) state.map.setView(state.own.latlng, Math.max(state.map.getZoom(), 11));
-    locate();
+    startGPS();
+    if (state.own.latlng) {
+      state.map.setView(state.own.latlng, Math.max(state.map.getZoom(), 11), { animate: false });
+      setFollow(true);
+    } else {
+      showToast('GPS 取得中…');
+      setFollow(true);
+    }
   };
+  document.getElementById('btn-orient').onclick = () =>
+    setOrientation(state.view.mode === 'track' ? 'north' : 'track');
+  document.getElementById('btn-direct').onclick = () => {
+    openPanel('direct');
+    renderDirectResults();
+    document.getElementById('direct-q').focus();
+  };
+  document.getElementById('direct-close').onclick = () => closePanel('direct');
+  document.getElementById('direct-q').oninput = renderDirectResults;
+  document.getElementById('btn-nrst').onclick = () => { openPanel('nrst'); renderNrst(); };
+  document.getElementById('nrst-close').onclick = () => closePanel('nrst');
+  document.querySelectorAll('.seg-btn').forEach(b => b.onclick = () => {
+    nrstKind = b.dataset.nrst;
+    document.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('active', x === b));
+    renderNrst();
+  });
   const routeBtn = document.getElementById('btn-route');
   routeBtn.onclick = () => {
     state.routeMode = !state.routeMode;
@@ -428,38 +829,37 @@ function wireUI() {
   };
   document.getElementById('rb-clear').onclick = clearRoute;
   document.getElementById('rb-close').onclick = () => document.getElementById('routebar').classList.add('hidden');
-  document.getElementById('btn-theme').onclick = toggleTheme;
-  document.getElementById('btn-menu').onclick = () => document.getElementById('menu').classList.remove('hidden');
-  document.getElementById('menu-close').onclick = () => document.getElementById('menu').classList.add('hidden');
-  document.getElementById('mi-save-area').onclick = () => { document.getElementById('menu').classList.add('hidden'); saveArea(); };
-  document.getElementById('mi-hazards').onclick = () => { document.getElementById('menu').classList.add('hidden'); fetchHazards(); };
+  document.getElementById('btn-menu').onclick = () => openPanel('menu');
+  document.getElementById('menu-close').onclick = () => closePanel('menu');
+  document.getElementById('mi-theme').onclick = toggleTheme;
+  document.getElementById('mi-save-area').onclick = () => { closePanel('menu'); saveArea(); };
+  document.getElementById('mi-hazards').onclick = () => { closePanel('menu'); fetchHazards(); };
   document.getElementById('mi-import').onclick = () => document.getElementById('import-file').click();
+  document.getElementById('mi-sim').onclick = () => { closePanel('menu'); toggleSim(); };
   document.getElementById('import-file').onchange = e => { if (e.target.files[0]) importGeoJSON(e.target.files[0]); };
-  document.getElementById('magvar').onchange = e => { state.magvar = parseFloat(e.target.value) || 0; savePrefs(); redrawRoute(); };
-  document.getElementById('gs').onchange = e => { state.gs = parseFloat(e.target.value) || 0; savePrefs(); updateRoutebar(); };
-  // 地図移動で follow 解除
-  state.map.on('dragstart', () => { state.own.follow = false; });
+  document.getElementById('magvar').onchange = e => { state.magvar = parseFloat(e.target.value) || 0; savePrefs(); redrawRoute(); updateHUD(); };
+  document.getElementById('gs').onchange = e => { state.gs = parseFloat(e.target.value) || 0; savePrefs(); updateRoutebar(); updateHUD(); };
   updateCacheNote();
 }
 
 function toggleTheme() {
   const night = document.body.classList.toggle('theme-night');
   document.body.classList.toggle('theme-day', !night);
-  document.getElementById('btn-theme').textContent = night ? '☀️' : '🌙';
   document.querySelector('meta[name=theme-color]').setAttribute('content', night ? '#0b1622' : '#0a7ec2');
   savePrefs();
 }
 
 /* ---------------- 状態表示・ユーティリティ ---------------- */
-function setGpsStatus(txt, ok) {
-  const el = document.getElementById('gps-status');
-  el.textContent = txt; el.className = 'stat' + (ok ? ' ok' : ok === false ? ' warn' : '');
+function setDot(id, ok) {
+  const el = document.getElementById(id);
+  el.className = 'dot' + (ok == null ? '' : ok ? ' ok' : ' warn');
 }
-function updateNetStatus() {
-  const el = document.getElementById('net-status');
-  if (navigator.onLine) { el.textContent = 'オンライン'; el.className = 'stat ok'; }
-  else { el.textContent = 'オフライン', el.className = 'stat warn'; }
+function setGpsDot(ok, accM) {
+  setDot('dot-gps', ok);
+  const el = document.getElementById('dot-gps');
+  el.textContent = ok && accM != null ? `GPS ±${Math.round(accM)}m` : 'GPS';
 }
+function updateNetStatus() { setDot('dot-net', navigator.onLine); }
 async function updateCacheNote() {
   try {
     const cache = await caches.open('helinav-tiles');
@@ -478,7 +878,8 @@ function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<':
 
 function savePrefs() {
   localStorage.setItem('heli.prefs', JSON.stringify({
-    night: document.body.classList.contains('theme-night'), magvar: state.magvar, gs: state.gs,
+    night: document.body.classList.contains('theme-night'),
+    magvar: state.magvar, gs: state.gs, mode: state.view.mode,
   }));
 }
 function restorePrefs() {
@@ -487,6 +888,7 @@ function restorePrefs() {
     if (p.magvar != null) state.magvar = p.magvar;
     if (p.gs != null) state.gs = p.gs;
     if (p.night) { document.body.classList.add('theme-night'); document.body.classList.remove('theme-day'); }
+    if (p.mode === 'track') setTimeout(() => setOrientation('track'), 0);
   } catch (_) {}
 }
 
@@ -498,8 +900,9 @@ function registerSW() {
 
 document.addEventListener('DOMContentLoaded', () => {
   init();
-  const p = JSON.parse(localStorage.getItem('heli.prefs') || '{}');
   document.getElementById('magvar').value = state.magvar;
   document.getElementById('gs').value = state.gs;
-  if (p.night) document.getElementById('btn-theme').textContent = '☀️';
 });
+
+// デバッグ/テスト用フック
+window.HN = { state, handleFix, directTo, addWaypoint, setOrientation, toggleSim, setActiveWp };
