@@ -1,0 +1,505 @@
+{
+  "cameras": [
+    {
+      "id": "kawaguchiko-fuji",
+      "name": "河口湖 富士山ライブカメラ",
+      "lat": 35.517,
+      "lon": 138.755,
+      "heading_deg": 190,
+      "fov_deg": 55,
+      "elevation_ft": 2730,
+      "description": "河口湖北岸から富士山方向のYouTubeライブ配信。富士山北面と山頂部の雲の付き方を確認できる。",
+      "source": {
+        "type": "youtube",
+        "video_id": "bdUbACCWmoY"
+      },
+      "attribution": "YouTube ライブ配信 (河口湖からの富士山ライブカメラ)",
+      "page_url": "https://www.youtube.com/watch?v=bdUbACCWmoY"
+    },
+    {
+      "id": "gotemba-sbs",
+      "name": "御殿場 情報カメラ (SBS)",
+      "lat": 35.3086,
+      "lon": 138.9349,
+      "heading_deg": 285,
+      "fov_deg": 60,
+      "elevation_ft": 1480,
+      "description": "御殿場市街から富士山東面方向。富士山東側斜面と御殿場口方面の雲底・視程の目視確認に有用。",
+      "source": {
+        "type": "youtube",
+        "video_id": "3ltxADrccf8"
+      },
+      "attribution": "SBS静岡放送 (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=3ltxADrccf8"
+    },
+    {
+      "id": "nihondaira-sbs",
+      "name": "日本平 富士山・清水港カメラ (SBS)",
+      "lat": 34.976,
+      "lon": 138.386,
+      "heading_deg": 35,
+      "fov_deg": 60,
+      "elevation_ft": 980,
+      "description": "日本平山頂から清水港越しに富士山方向。駿河湾沿岸の視程と富士山方面の雲を確認できる。",
+      "source": {
+        "type": "youtube",
+        "video_id": "e5fTf-gywY0"
+      },
+      "attribution": "SBS NEWS6 (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=e5fTf-gywY0",
+      "metar_station": "RJNS"
+    },
+    {
+      "id": "satta-pass",
+      "name": "さった峠 富士山・駿河湾カメラ",
+      "lat": 35.0678,
+      "lon": 138.5225,
+      "heading_deg": 35,
+      "fov_deg": 60,
+      "elevation_ft": 300,
+      "description": "静岡市清水区・さった峠から富士山と駿河湾、国道1号方向。海上視程の目視確認に有用。",
+      "source": {
+        "type": "youtube",
+        "video_id": "GsD9QQEKSzQ"
+      },
+      "attribution": "静岡市 (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=GsD9QQEKSzQ",
+      "metar_station": "RJNS"
+    },
+    {
+      "id": "odaiba-endaiba",
+      "name": "お台場 東京湾ライブカメラ (EN DAIBA)",
+      "lat": 35.628,
+      "lon": 139.777,
+      "heading_deg": 130,
+      "fov_deg": 90,
+      "elevation_ft": 100,
+      "description": "お台場から東京湾・羽田方向。東京湾上の視程と羽田/東京ヘリポート方面の天候確認に有用。チャンネル埋め込みのため配信更新に自動追従。",
+      "source": {
+        "type": "youtube",
+        "video_id": "",
+        "channel_id": "UCMaXtOvzgcCQt7MZwJmr7XA"
+      },
+      "attribution": "EN DAIBA (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/channel/UCMaXtOvzgcCQt7MZwJmr7XA",
+      "metar_station": "RJTT"
+    },
+    {
+      "id": "yokohama-mm-tbs",
+      "name": "横浜みなとみらいライブカメラ (TBS)",
+      "lat": 35.4498,
+      "lon": 139.6424,
+      "heading_deg": 100,
+      "fov_deg": 70,
+      "elevation_ft": 160,
+      "description": "海岸通から大さん橋・ベイブリッジ方向。横浜港周辺の視程・雲底の目視確認に有用。",
+      "source": {
+        "type": "youtube",
+        "video_id": "x3P3N3VGvtU"
+      },
+      "attribution": "TBS NEWS DIG (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=x3P3N3VGvtU",
+      "metar_station": "RJTT"
+    },
+    {
+      "id": "shonan-fujiview",
+      "name": "湘南モノレール 富士ビューカメラ",
+      "lat": 35.3316,
+      "lon": 139.5266,
+      "heading_deg": 270,
+      "fov_deg": 50,
+      "elevation_ft": 120,
+      "description": "湘南深沢付近から富士山方向。相模湾岸から見た富士山・丹沢方面の視程確認に有用。ページ内画像を自動抽出して表示。",
+      "source": {
+        "type": "page_image",
+        "url": "https://www.shonan-monorail.co.jp/viewcamera/"
+      },
+      "attribution": "湘南モノレール株式会社",
+      "page_url": "https://www.shonan-monorail.co.jp/viewcamera/",
+      "metar_station": "RJTA"
+    },
+    {
+      "id": "tokyo-heliport-west",
+      "name": "【デモ】東京ヘリポート 西向きカメラ",
+      "lat": 35.6367,
+      "lon": 139.8395,
+      "heading_deg": 270,
+      "fov_deg": 60,
+      "elevation_ft": 20,
+      "description": "新木場・東京ヘリポートから都心〜富士山方向。デモ気象: 快晴。",
+      "reference_image": "data/reference/tokyo-heliport-west.jpg",
+      "source": {
+        "type": "local",
+        "path": "data/current/tokyo-heliport-west.jpg"
+      },
+      "sky_bbox": [
+        10,
+        6,
+        780,
+        219
+      ],
+      "targets": [
+        {
+          "name": "富士山",
+          "distance_km": 95,
+          "bbox": [
+            80,
+            233,
+            140,
+            87
+          ],
+          "elevation_ft_msl": 12388
+        },
+        {
+          "name": "丹沢山地",
+          "distance_km": 55,
+          "bbox": [
+            310,
+            270,
+            180,
+            50
+          ],
+          "elevation_ft_msl": 4100
+        },
+        {
+          "name": "新宿ビル群",
+          "distance_km": 12,
+          "bbox": [
+            545,
+            275,
+            110,
+            45
+          ],
+          "elevation_ft_msl": 820
+        },
+        {
+          "name": "運河対岸クレーン",
+          "distance_km": 2,
+          "bbox": [
+            708,
+            236,
+            44,
+            84
+          ]
+        }
+      ],
+      "metar_station": "RJTT"
+    },
+    {
+      "id": "yokohama-mm-southwest",
+      "name": "【デモ】横浜みなとみらい 南西向きカメラ",
+      "lat": 35.4553,
+      "lon": 139.635,
+      "heading_deg": 225,
+      "fov_deg": 60,
+      "elevation_ft": 100,
+      "description": "みなとみらいから大山・富士山方向。デモ気象: 靄 (視程約6km)。",
+      "reference_image": "data/reference/yokohama-mm-southwest.jpg",
+      "source": {
+        "type": "local",
+        "path": "data/current/yokohama-mm-southwest.jpg"
+      },
+      "sky_bbox": [
+        10,
+        6,
+        780,
+        105
+      ],
+      "targets": [
+        {
+          "name": "富士山",
+          "distance_km": 80,
+          "bbox": [
+            65,
+            217,
+            130,
+            103
+          ],
+          "elevation_ft_msl": 12388
+        },
+        {
+          "name": "大山",
+          "distance_km": 40,
+          "bbox": [
+            275,
+            253,
+            150,
+            67
+          ],
+          "elevation_ft_msl": 4100
+        },
+        {
+          "name": "ベイブリッジ主塔",
+          "distance_km": 4,
+          "bbox": [
+            530,
+            235,
+            60,
+            85
+          ],
+          "elevation_ft_msl": 610
+        },
+        {
+          "name": "港湾クレーン",
+          "distance_km": 1,
+          "bbox": [
+            674,
+            119,
+            52,
+            201
+          ]
+        }
+      ],
+      "metar_station": "RJTT"
+    },
+    {
+      "id": "kawasaki-coast-east",
+      "name": "【デモ】川崎臨海部 東向きカメラ",
+      "lat": 35.5065,
+      "lon": 139.753,
+      "heading_deg": 90,
+      "fov_deg": 60,
+      "elevation_ft": 30,
+      "description": "川崎臨海部から東京湾方向。デモ気象: 濃霧 (視程約1.2km)。",
+      "reference_image": "data/reference/kawasaki-coast-east.jpg",
+      "source": {
+        "type": "local",
+        "path": "data/current/kawasaki-coast-east.jpg"
+      },
+      "sky_bbox": [
+        10,
+        6,
+        780,
+        40
+      ],
+      "targets": [
+        {
+          "name": "風の塔",
+          "distance_km": 10,
+          "bbox": [
+            140,
+            300,
+            60,
+            20
+          ],
+          "elevation_ft_msl": 330
+        },
+        {
+          "name": "製鉄所クレーン群",
+          "distance_km": 3,
+          "bbox": [
+            310,
+            231,
+            140,
+            89
+          ],
+          "elevation_ft_msl": 430
+        },
+        {
+          "name": "プラント煙突",
+          "distance_km": 1.5,
+          "bbox": [
+            576,
+            31,
+            48,
+            289
+          ],
+          "elevation_ft_msl": 680
+        },
+        {
+          "name": "隣接倉庫",
+          "distance_km": 0.4,
+          "bbox": [
+            692,
+            153,
+            96,
+            167
+          ]
+        }
+      ],
+      "metar_station": "RJTT"
+    },
+    {
+      "id": "atsugi-north",
+      "name": "【デモ】厚木 北西向きカメラ",
+      "lat": 35.452,
+      "lon": 139.36,
+      "heading_deg": 315,
+      "fov_deg": 60,
+      "elevation_ft": 200,
+      "description": "厚木から丹沢・富士山方向。デモ気象: 曇天・雲底約2,600ft AGL。",
+      "reference_image": "data/reference/atsugi-north.jpg",
+      "source": {
+        "type": "local",
+        "path": "data/current/atsugi-north.jpg"
+      },
+      "sky_bbox": [
+        10,
+        6,
+        780,
+        116
+      ],
+      "targets": [
+        {
+          "name": "富士山",
+          "distance_km": 45,
+          "bbox": [
+            98,
+            139,
+            85,
+            63
+          ],
+          "elevation_ft_msl": 12388
+        },
+        {
+          "name": "大山",
+          "distance_km": 18,
+          "bbox": [
+            318,
+            175,
+            85,
+            50
+          ],
+          "elevation_ft_msl": 4100
+        },
+        {
+          "name": "送電鉄塔 (尾根上)",
+          "distance_km": 6,
+          "bbox": [
+            533,
+            130,
+            24,
+            66
+          ],
+          "elevation_ft_msl": 1900
+        },
+        {
+          "name": "丘陵地",
+          "distance_km": 8,
+          "bbox": [
+            570,
+            257,
+            140,
+            63
+          ],
+          "elevation_ft_msl": 950
+        },
+        {
+          "name": "市街ビル",
+          "distance_km": 3,
+          "bbox": [
+            705,
+            264,
+            80,
+            56
+          ],
+          "elevation_ft_msl": 450
+        }
+      ],
+      "metar_station": "RJTA"
+    },
+    {
+      "id": "sapporo-sosei",
+      "name": "札幌 創世スクエア ライブカメラ",
+      "lat": 43.0621,
+      "lon": 141.3543,
+      "heading_deg": 260,
+      "fov_deg": 70,
+      "elevation_ft": 400,
+      "description": "さっぽろ創世スクエアから札幌市街方向。石狩平野の視程・雲底の目視確認に有用。",
+      "source": {
+        "type": "youtube",
+        "video_id": "kfIQBC0hrII"
+      },
+      "attribution": "YouTube ライブ配信 (いまの札幌／さっぽろ創世スクエア)",
+      "page_url": "https://www.youtube.com/watch?v=kfIQBC0hrII",
+      "metar_station": "RJCO"
+    },
+    {
+      "id": "sendai-markone",
+      "name": "仙台 マークワン屋上 情報カメラ (ミヤギテレビ)",
+      "lat": 38.2596,
+      "lon": 140.8807,
+      "heading_deg": 280,
+      "fov_deg": 70,
+      "elevation_ft": 400,
+      "description": "仙台駅西口・仙台マークワン屋上から市街〜青葉山方向。仙台平野の視程確認に有用。",
+      "source": {
+        "type": "youtube",
+        "video_id": "PcCg30tb25c"
+      },
+      "attribution": "ミヤギテレビ (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=PcCg30tb25c",
+      "metar_station": "RJSS"
+    },
+    {
+      "id": "nagoya-station",
+      "name": "名古屋駅 ライブカメラ",
+      "lat": 35.1709,
+      "lon": 136.885,
+      "heading_deg": 290,
+      "fov_deg": 60,
+      "elevation_ft": 150,
+      "description": "名古屋駅・JRセントラルタワーズ方向。濃尾平野の視程・高層ビルの雲がかりの確認に有用。チャンネル埋め込みのため配信更新に自動追従。",
+      "source": {
+        "type": "youtube",
+        "video_id": "",
+        "channel_id": "UCjmqhsGQ9J1QK4r5mUrZb4A"
+      },
+      "attribution": "YouTube ライブ配信 (名古屋駅ライブカメラ)",
+      "page_url": "https://www.youtube.com/channel/UCjmqhsGQ9J1QK4r5mUrZb4A/live",
+      "metar_station": "RJNA"
+    },
+    {
+      "id": "osaka-shinsaibashi",
+      "name": "大阪 心斎橋 ライブカメラ",
+      "lat": 34.6738,
+      "lon": 135.501,
+      "heading_deg": 180,
+      "fov_deg": 60,
+      "elevation_ft": 60,
+      "description": "心斎橋筋の街頭カメラ。市街地のため空の見える範囲は限定的 (降水・路面状況の確認向き)。",
+      "source": {
+        "type": "youtube",
+        "video_id": "YZMZSqz9fx8"
+      },
+      "attribution": "FST.NET (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=YZMZSqz9fx8",
+      "metar_station": "RJOO"
+    },
+    {
+      "id": "fukuoka-tnc",
+      "name": "福岡 空港・天神方面カメラ (テレビ西日本)",
+      "lat": 33.5931,
+      "lon": 130.351,
+      "heading_deg": 100,
+      "fov_deg": 70,
+      "elevation_ft": 300,
+      "description": "百道浜のテレビ西日本から福岡空港・天神方向。福岡市街と空港方面の視程・雲底の目視確認に有用。",
+      "source": {
+        "type": "youtube",
+        "video_id": "CzgSFUAbE9s"
+      },
+      "attribution": "テレビ西日本 (YouTube ライブ配信)",
+      "page_url": "https://www.youtube.com/watch?v=CzgSFUAbE9s",
+      "metar_station": "RJFF"
+    },
+    {
+      "id": "naha-kaiho",
+      "name": "那覇 海上保安本部 ライブカメラ",
+      "lat": 26.2185,
+      "lon": 127.679,
+      "heading_deg": 280,
+      "fov_deg": 60,
+      "elevation_ft": 100,
+      "description": "第十一管区海上保安本部庁舎から那覇港方向。那覇空港北側の海上視程の確認に有用。ページ内画像を自動抽出して表示。",
+      "source": {
+        "type": "page_image",
+        "url": "https://www6.kaiho.mlit.go.jp/11kanku/naha/11th_rcgh/livecamera/index.html"
+      },
+      "attribution": "第十一管区海上保安本部",
+      "page_url": "https://www6.kaiho.mlit.go.jp/11kanku/naha/11th_rcgh/livecamera/index.html",
+      "metar_station": "ROAH"
+    }
+  ]
+}
