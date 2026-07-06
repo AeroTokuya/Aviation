@@ -107,11 +107,14 @@ function renderMarkers(cams) {
     const tooltip = cam.summary
       ? `${cam.name}<br>視程 ${fmtVisibility(cam.summary)} / シーリング ${fmtCeiling(cam.summary)}`
       : `${cam.name}<br>${STATUS_LABELS[cam.status] || ""}`;
+    // 推定ありのカメラは常に最前面 (推定なしアイコンに埋もれてクリック不能になるのを防ぐ)
+    const zOff = cam.summary ? 10000 : 0;
     if (markers[cam.id]) {
       markers[cam.id].setIcon(icon);
       markers[cam.id].setTooltipContent(tooltip);
+      markers[cam.id].setZIndexOffset(zOff);
     } else {
-      const m = L.marker([cam.lat, cam.lon], { icon, title: cam.name });
+      const m = L.marker([cam.lat, cam.lon], { icon, title: cam.name, zIndexOffset: zOff });
       m.on("click", () => openPanel(cam.id));
       m.bindTooltip(tooltip, { direction: "top", offset: [0, -14] });
       m.addTo(map);
@@ -120,7 +123,9 @@ function renderMarkers(cams) {
     bounds.push([cam.lat, cam.lon]);
   }
   if (bounds.length && !map._loadedOnce) {
-    map.fitBounds(bounds, { padding: [70, 70] });
+    // 初期表示は推定できているカメラ群に寄せる (なければ全カメラ)
+    const estBounds = cams.filter((c) => c.summary).map((c) => [c.lat, c.lon]);
+    map.fitBounds(estBounds.length ? estBounds : bounds, { padding: [70, 70], maxZoom: 11 });
     map._loadedOnce = true;
   }
 }
