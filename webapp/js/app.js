@@ -23,8 +23,20 @@ const ASP_CLASSES = {
   TCA:  { label: '進入管制区(概略)',   color: '#8a5cf5', dash: '12 8', fill: 0.02, on: false },
 };
 
+// ベースマップ。日本の VFR 用途には地理院タイルが安定・低クラッタで最適。
+const BASEMAPS = {
+  gsi_pale:  { name: '淡色 (地理院)',    url: 'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',          attr: '地理院タイル', maxZoom: 18 },
+  gsi_std:   { name: '標準 (地理院)',    url: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',           attr: '地理院タイル', maxZoom: 18 },
+  osm:       { name: 'OSM',             url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                     attr: '© OpenStreetMap contributors', maxZoom: 18 },
+  gsi_photo: { name: '航空写真 (地理院)', url: 'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.png', attr: '地理院タイル(写真)', maxZoom: 18 },
+};
+const BASEMAP_FALLBACK = ['gsi_pale', 'osm', 'gsi_std'];
+
 const state = {
   map: null,
+  basemap: 'gsi_pale',
+  tileLayer: null,
+  tileErrs: 0,
   layers: {},          // layer name -> L.LayerGroup
   visible: { airports: true, heliports: true, navaids: true, hazards: true, airspace: true, wx: true, route: true },
   asp: Object.fromEntries(Object.entries(ASP_CLASSES).map(([k, v]) => [k, v.on])),
@@ -124,9 +136,7 @@ function buildMap() {
     fadeAnimation: false,  // 回転時のタイルちらつき防止
   }).setView([35.6, 139.7], 8);
 
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18, crossOrigin: true,
-  }).addTo(state.map);
+  setBasemap(state.basemap);
 
   for (const name of Object.keys(DATA_FILES)) state.layers[name] = L.layerGroup().addTo(state.map);
   state.layers.wx = L.layerGroup().addTo(state.map);
@@ -146,6 +156,34 @@ function buildMap() {
   updateZoomClass();
   // 手動パンで追従解除(ノースアップ時のみドラッグ可)
   state.map.on('dragstart', () => setFollow(false));
+}
+
+/* ---------------- ベースマップ ---------------- */
+function setBasemap(key, opts = {}) {
+  const bm = BASEMAPS[key] || BASEMAPS.gsi_pale;
+  state.basemap = key;
+  state.tileErrs = 0;
+  if (state.tileLayer) state.map.removeLayer(state.tileLayer);
+  state.tileLayer = L.tileLayer(bm.url, { maxZoom: bm.maxZoom, crossOrigin: true });
+  // タイル取得失敗が続いたら別ソースへ自動切替(地図が真っ白になるのを防ぐ)
+  state.tileLayer.on('tileerror', () => {
+    state.tileErrs++;
+    if (state.tileErrs === 12 && navigator.onLine) {
+      const next = BASEMAP_FALLBACK.find(k => k !== state.basemap && !(opts.tried || []).includes(k));
+      if (next) {
+        showToast(`地図タイルの取得に失敗 → ${BASEMAPS[next].name} に切替えます`);
+        setBasemap(next, { tried: [...(opts.tried || []), state.basemap], auto: true });
+        updateBasemapChips();
+      }
+    }
+  });
+  state.tileLayer.addTo(state.map);
+  document.getElementById('attrib').textContent = '© ' + bm.attr;
+  if (!opts.auto) savePrefs();
+}
+function updateBasemapChips() {
+  document.querySelectorAll('#bm-chips .chip').forEach(b =>
+    b.classList.toggle('active', b.dataset.bm === state.basemap));
 }
 
 // ズームに応じたデクラッタ: 広域ではマーカーを縮小・識別ラベル非表示
@@ -1049,13 +1087,14 @@ async function saveArea() {
   const b = state.map.getBounds();
   const z0 = state.map.getZoom();
   const zooms = [z0, Math.min(18, z0 + 1), Math.min(18, z0 + 2)];
+  const tpl = BASEMAPS[state.basemap].url;
   const urls = [];
   for (const z of zooms) {
     const nw = latlng2tile(b.getNorth(), b.getWest(), z);
     const se = latlng2tile(b.getSouth(), b.getEast(), z);
     for (let x = nw.x; x <= se.x; x++)
       for (let y = nw.y; y <= se.y; y++)
-        urls.push(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
+        urls.push(tpl.replace('{z}', z).replace('{x}', x).replace('{y}', y));
   }
   if (urls.length > 1500) { showToast(`タイル数が多すぎます (${urls.length})。ズームインしてください`); return; }
   showToast(`タイル ${urls.length} 枚を保存中…`);
@@ -1131,6 +1170,11 @@ function wireUI() {
   });
   document.getElementById('btn-layers').onclick = () => openPanel('layers');
   document.getElementById('layers-close').onclick = () => closePanel('layers');
+  // ベースマップチップ (単一選択)
+  document.querySelectorAll('#bm-chips .chip').forEach(btn => {
+    btn.onclick = () => { setBasemap(btn.dataset.bm); updateBasemapChips(); };
+  });
+  updateBasemapChips();
   document.getElementById('zoom-in').onclick = () => state.map.zoomIn();
   document.getElementById('zoom-out').onclick = () => state.map.zoomOut();
   document.getElementById('btn-locate').onclick = () => {
@@ -1221,7 +1265,7 @@ function savePrefs() {
   localStorage.setItem('heli.prefs', JSON.stringify({
     night: document.body.classList.contains('theme-night'),
     magvar: state.magvar, gs: state.gs, mode: state.view.mode,
-    visible: state.visible, asp: state.asp, fuel: state.fuel,
+    visible: state.visible, asp: state.asp, fuel: state.fuel, basemap: state.basemap,
   }));
 }
 function restorePrefs() {
@@ -1232,6 +1276,7 @@ function restorePrefs() {
     if (p.visible) Object.assign(state.visible, p.visible);
     if (p.asp) Object.assign(state.asp, p.asp);
     if (p.fuel) Object.assign(state.fuel, p.fuel);
+    if (p.basemap && BASEMAPS[p.basemap]) state.basemap = p.basemap;
     if (p.night) { document.body.classList.add('theme-night'); document.body.classList.remove('theme-day'); }
     if (p.mode === 'track') setTimeout(() => setOrientation('track'), 0);
   } catch (_) {}

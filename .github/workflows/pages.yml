@@ -7,7 +7,7 @@ name: Deploy HeliNav to GitHub Pages
 on:
   push:
     branches:
-      - claude/helicopter-nav-app-bu6kdx
+      - claude/navigation-app-flight-usability-go179x
       - main
       - master
   workflow_dispatch:
