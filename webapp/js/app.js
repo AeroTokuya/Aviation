@@ -12,12 +12,22 @@ const DATA_FILES = {
   heliports: 'data/heliports.geojson',
   navaids: 'data/navaids.geojson',
   hazards: 'data/powerlines.geojson',
+  airspace: 'data/airspace.geojson',
+};
+
+// 空域クラス。important = 既定で表示
+const ASP_CLASSES = {
+  CTR:  { label: '管制圏',            color: '#2f6fed', dash: null,   fill: 0.05, on: true },
+  INFO: { label: '情報圏',            color: '#1fa294', dash: '6 6',  fill: 0.04, on: true },
+  RSTR: { label: '飛行回避(原子力等)', color: '#e0342f', dash: '2 5',  fill: 0.12, on: true },
+  TCA:  { label: '進入管制区(概略)',   color: '#8a5cf5', dash: '12 8', fill: 0.02, on: false },
 };
 
 const state = {
   map: null,
   layers: {},          // layer name -> L.LayerGroup
-  visible: { airports: true, heliports: true, navaids: true, hazards: true, route: true },
+  visible: { airports: true, heliports: true, navaids: true, hazards: true, airspace: true, route: true },
+  asp: Object.fromEntries(Object.entries(ASP_CLASSES).map(([k, v]) => [k, v.on])),
   data: {},            // layer name -> GeoJSON
   route: [],           // [{lat, lon, name}]
   routeMode: false,
@@ -115,6 +125,7 @@ function buildMap() {
 
   for (const name of Object.keys(DATA_FILES)) state.layers[name] = L.layerGroup().addTo(state.map);
   state.layers.route = L.layerGroup().addTo(state.map);
+  for (const name of Object.keys(state.layers)) if (!state.visible[name]) state.map.removeLayer(state.layers[name]);
 
   state.map.on('click', onMapClick);
   // ズーム/移動で間引きレイヤーを再描画
@@ -163,11 +174,13 @@ function renderLayer(name) {
   if (!gj) return;
   if (name === 'hazards') return renderHazards(gj, grp);
 
+  if (name === 'airspace') return renderAirspace(gj, grp);
+
   const feats = gj.features || [];
   let list = feats;
   if (name in GATED) {
     const z = state.map.getZoom();
-    if (z < GATED[name]) { updateGateNote(name, feats.length, 0); return; }
+    if (z < GATED[name]) return;
     const b = state.map.getBounds();
     list = feats.filter(f => {
       const c = f.geometry && f.geometry.coordinates;
@@ -180,7 +193,6 @@ function renderLayer(name) {
       list.sort((a, z2) => (a.properties.type === 'hospital' ? 0 : 1) - (z2.properties.type === 'hospital' ? 0 : 1));
       list = list.slice(0, 400);
     }
-    updateGateNote(name, feats.length, list.length);
   }
   for (const f of list) {
     const c = f.geometry.coordinates;
@@ -190,11 +202,50 @@ function renderLayer(name) {
   }
 }
 
-function updateGateNote(name, total, shown) {
-  if (name !== 'heliports') return;
-  const btn = document.querySelector('.layer-toggle[data-layer="heliports"] .lbl');
-  if (!btn) return;
-  btn.textContent = shown === 0 ? 'ヘリ/病院' : `ヘリ/病院 ${shown}`;
+/* ---------------- 空域 ---------------- */
+function renderAirspace(gj, grp) {
+  const NM2M = 1852;
+  for (const f of (gj.features || [])) {
+    const p = f.properties || {};
+    const cfg = ASP_CLASSES[p.class];
+    if (!cfg || !state.asp[p.class]) continue;
+    let shape;
+    if (f.geometry.type === 'Point' && p.radius_nm) {
+      const [lon, lat] = f.geometry.coordinates;
+      shape = L.circle([lat, lon], {
+        radius: p.radius_nm * NM2M,
+        color: cfg.color, weight: p.class === 'RSTR' ? 2.5 : 2, opacity: 0.85,
+        dashArray: cfg.dash, fillColor: cfg.color, fillOpacity: cfg.fill,
+        interactive: true, bubblingMouseEvents: false,
+      });
+    } else if (f.geometry.type === 'Polygon') {
+      shape = L.polygon(f.geometry.coordinates[0].map(c => [c[1], c[0]]), {
+        color: cfg.color, weight: 2, opacity: 0.85,
+        dashArray: cfg.dash, fillColor: cfg.color, fillOpacity: cfg.fill,
+        interactive: true, bubblingMouseEvents: false,
+      });
+    } else continue;
+    shape.on('click', ev => { L.DomEvent.stop(ev); openAirspace(p); });
+    shape.addTo(grp);
+  }
+}
+function openAirspace(p) {
+  const cfg = ASP_CLASSES[p.class] || {};
+  const rows = [];
+  if (p.apt) rows.push(['関連空港', p.apt]);
+  if (p.radius_nm) rows.push(['半径(概略)', p.radius_nm + ' NM']);
+  if (p.alt) rows.push(['高度', p.alt]);
+  if (p.freq) rows.push(['周波数', p.freq]);
+  if (p.note) rows.push(['備考', p.note]);
+  const kv = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('');
+  document.getElementById('sheet-body').innerHTML = `
+    <div class="sheet-title"><span class="asp-swatch" style="--c:${cfg.color}"></span>${escapeHtml(p.name || '空域')}</div>
+    <div class="sheet-sub">${escapeHtml(cfg.label || p.class || '')}</div>
+    <dl class="kv">${kv}</dl>
+    <div class="sheet-warn">⚠️ 表示範囲は<b>円による概略</b>です。実際の水平・垂直範囲は AIP Japan・告示で必ず照合してください。</div>
+    <div class="sheet-actions"><button class="btn-ghost" id="sheet-close">閉じる</button></div>`;
+  document.getElementById('sheet').classList.remove('hidden');
+  document.getElementById('sheet-close').onclick = closeSheet;
 }
 
 function renderHazards(gj, grp) {
@@ -209,20 +260,58 @@ function renderHazards(gj, grp) {
   }).addTo(grp);
 }
 
-const ICONS = {
-  airport: '✈️', heliport: '🚁', hospital: '🏥', navaid: '📡',
+/* 航空図スタイルの SVG シンボル (VFRチャート風: 管制=青 / 非管制=マゼンタ) */
+const SYM = {
+  airport(p) {
+    const col = p.freqs && p.freqs.TWR ? 'var(--sym-apt-twr)' : 'var(--sym-apt)';
+    const big = p.class === 'large airport';
+    const r = big ? 8.5 : 7;
+    return `<svg viewBox="0 0 24 24" class="${big ? 'sym-lg' : ''}">
+      <circle cx="12" cy="12" r="${r}" fill="var(--sym-bg)" stroke="${col}" stroke-width="1.8"/>
+      <rect x="10.8" y="${12 - r + 1.6}" width="2.4" height="${(r - 1.6) * 2}" rx="1.1" fill="${col}" transform="rotate(45 12 12)"/>
+    </svg>`;
+  },
+  heliport() {
+    return `<svg viewBox="0 0 24 24" class="sym-sm">
+      <circle cx="12" cy="12" r="7" fill="var(--sym-bg)" stroke="var(--sym-heli)" stroke-width="1.8"/>
+      <path d="M9.4 8.5v7M14.6 8.5v7M9.4 12h5.2" stroke="var(--sym-heli)" stroke-width="1.9" stroke-linecap="round"/>
+    </svg>`;
+  },
+  hospital() {
+    return `<svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="7.5" fill="var(--sym-bg)" stroke="var(--sym-hosp)" stroke-width="1.9"/>
+      <path d="M9.2 8.4v7.2M14.8 8.4v7.2M9.2 12h5.6" stroke="var(--sym-hosp)" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
+  },
+  navaid(p) {
+    if ((p.kind || '').startsWith('NDB')) {
+      return `<svg viewBox="0 0 24 24" class="sym-sm">
+        <circle cx="12" cy="12" r="7" fill="none" stroke="var(--sym-apt)" stroke-width="1.7" stroke-dasharray="1.5 3" stroke-linecap="round"/>
+        <circle cx="12" cy="12" r="2.1" fill="var(--sym-apt)"/>
+      </svg>`;
+    }
+    return `<svg viewBox="0 0 24 24">
+      <path d="M7.5 5.5 h9 L21 12 l-4.5 6.5 h-9 L3 12 Z" fill="var(--sym-bg)" stroke="var(--sym-nav)" stroke-width="1.8" stroke-linejoin="round"/>
+      <circle cx="12" cy="12" r="1.9" fill="var(--sym-nav)"/>
+    </svg>`;
+  },
 };
 function facilityIcon(f) {
   const p = f.properties || {};
   const t = p.type || 'airport';
-  const glyph = ICONS[t] || '•';
-  const cls = t === 'hospital' ? 'hospital' : t;
-  // 地図回転を打ち消すラッパー(.mk-rot)にアイコン＋識別ラベルを入れる
+  const svg = (SYM[t] || SYM.airport)(p);
+  // 地図回転を打ち消すラッパー(.mk-rot)にシンボル＋識別ラベルを入れる。
+  // 見た目は小さく、タップ領域は 40px 確保。
   const id = (t === 'airport' || t === 'navaid') && p.ident ? `<div class="mk-id">${escapeHtml(p.ident)}</div>` : '';
   return L.divIcon({
-    className: '', iconSize: [34, 34], iconAnchor: [17, 17],
-    html: `<div class="mk-rot"><div class="mk ${cls}">${glyph}</div>${id}</div>`,
+    className: '', iconSize: [40, 40], iconAnchor: [20, 20],
+    html: `<div class="mk-rot"><div class="mk">${svg}</div>${id}</div>`,
   });
+}
+// 検索/NRST 結果行用の小型シンボル
+function listSym(type) {
+  const p = type === 'airport' ? { freqs: { TWR: 1 } } : {};
+  return `<span class="res-ic">${(SYM[type] || SYM.airport)(p)}</span>`;
 }
 
 /* ---------------- 施設シート ---------------- */
@@ -469,7 +558,10 @@ function drawOwnship() {
   // 画面上の機首角 = トラック + 地図回転角
   const scr = ((own.track || 0) + state.view.rot) % 360;
   const html = `<div class="ownship" style="transform:rotate(${scr}deg)">
-    <svg width="34" height="34" viewBox="0 0 26 26"><path d="M13 1 L23 24 L13 18 L3 24 Z" fill="#35c2ff" stroke="#fff" stroke-width="1.5"/></svg></div>`;
+    <svg width="34" height="34" viewBox="0 0 26 26">
+      <path d="M13 1.2 L22.5 24 L13 18.6 L3.5 24 Z" fill="#00c2ff" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M13 6.5 L18.6 21.2 L13 18 Z" fill="rgba(0,0,0,.25)"/>
+    </svg></div>`;
   const icon = L.divIcon({ className: '', iconSize: [34, 34], iconAnchor: [17, 17], html });
   if (!own.marker) own.marker = L.marker(own.latlng, { icon, interactive: false, zIndexOffset: 1000 }).addTo(state.map);
   else { own.marker.setLatLng(own.latlng); own.marker.setIcon(icon); }
@@ -608,7 +700,7 @@ function resultRow(it, ref) {
     right = `<span class="res-dist">${fmtNM(nm)}<small>NM</small></span><span class="res-brg">${fmtBrg(brg)}°</span>`;
   }
   return `<div class="res-row" data-lat="${it.lat}" data-lon="${it.lon}" data-name="${escapeHtml(it.ident || it.name)}">
-    <span class="res-ic">${ICONS[it.type] || '•'}</span>
+    ${listSym(it.type)}
     <span class="res-main"><b>${escapeHtml(it.label)}</b><small>${escapeHtml(sub)}</small></span>
     ${right}
     <span class="res-go">D→</span>
@@ -651,7 +743,7 @@ function wireResultRows(el, close) {
   });
 }
 function openPanel(id) {
-  for (const p of ['direct', 'nrst', 'sheet', 'menu']) if (p !== id) document.getElementById(p).classList.add('hidden');
+  for (const p of ['direct', 'nrst', 'sheet', 'menu', 'layers']) if (p !== id) document.getElementById(p).classList.add('hidden');
   document.getElementById(id).classList.remove('hidden');
 }
 function closePanel(id) { document.getElementById(id).classList.add('hidden'); }
@@ -776,23 +868,40 @@ function guessDataset(gj, fname) {
   if (/air/i.test(m) || /airport/i.test(fname)) return 'airports';
   if (/heli|hosp/i.test(m) || /heli|hosp/i.test(fname)) return 'heliports';
   if (/nav|vor/i.test(m) || /nav|vor/i.test(fname)) return 'navaids';
+  if (/airspace|ctr|tca/i.test(m) || /airspace|ctr/i.test(fname)) return 'airspace';
   if (/power|hazard|line/i.test(m) || /power|hazard/i.test(fname)) return 'hazards';
   // フォールバック: 最初の地物の type
   const t = gj.features && gj.features[0] && gj.features[0].properties && gj.features[0].properties.type;
-  return ({ airport: 'airports', heliport: 'heliports', hospital: 'heliports', navaid: 'navaids', powerline: 'hazards' })[t] || null;
+  return ({ airport: 'airports', heliport: 'heliports', hospital: 'heliports', navaid: 'navaids', powerline: 'hazards', airspace: 'airspace' })[t] || null;
 }
 
 /* ---------------- UI 配線 ---------------- */
 function wireUI() {
-  document.querySelectorAll('.layer-toggle').forEach(btn => {
+  // レイヤーチップ
+  document.querySelectorAll('#layer-chips .chip').forEach(btn => {
+    const name = btn.dataset.layer;
+    btn.classList.toggle('active', !!state.visible[name]);
     btn.onclick = () => {
-      const name = btn.dataset.layer;
       state.visible[name] = !state.visible[name];
       btn.classList.toggle('active', state.visible[name]);
-      if (state.visible[name]) state.layers[name].addTo(state.map);
+      if (state.visible[name]) { state.layers[name].addTo(state.map); renderLayer(name); }
       else state.map.removeLayer(state.layers[name]);
+      savePrefs();
     };
   });
+  // 空域クラスチップ
+  document.querySelectorAll('#asp-chips .chip').forEach(btn => {
+    const k = btn.dataset.asp;
+    btn.classList.toggle('active', !!state.asp[k]);
+    btn.onclick = () => {
+      state.asp[k] = !state.asp[k];
+      btn.classList.toggle('active', state.asp[k]);
+      renderLayer('airspace');
+      savePrefs();
+    };
+  });
+  document.getElementById('btn-layers').onclick = () => openPanel('layers');
+  document.getElementById('layers-close').onclick = () => closePanel('layers');
   document.getElementById('zoom-in').onclick = () => state.map.zoomIn();
   document.getElementById('zoom-out').onclick = () => state.map.zoomOut();
   document.getElementById('btn-locate').onclick = () => {
@@ -880,6 +989,7 @@ function savePrefs() {
   localStorage.setItem('heli.prefs', JSON.stringify({
     night: document.body.classList.contains('theme-night'),
     magvar: state.magvar, gs: state.gs, mode: state.view.mode,
+    visible: state.visible, asp: state.asp,
   }));
 }
 function restorePrefs() {
@@ -887,6 +997,8 @@ function restorePrefs() {
     const p = JSON.parse(localStorage.getItem('heli.prefs') || '{}');
     if (p.magvar != null) state.magvar = p.magvar;
     if (p.gs != null) state.gs = p.gs;
+    if (p.visible) Object.assign(state.visible, p.visible);
+    if (p.asp) Object.assign(state.asp, p.asp);
     if (p.night) { document.body.classList.add('theme-night'); document.body.classList.remove('theme-day'); }
     if (p.mode === 'track') setTimeout(() => setOrientation('track'), 0);
   } catch (_) {}

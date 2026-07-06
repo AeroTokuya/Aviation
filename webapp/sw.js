@@ -1,7 +1,7 @@
 /* HeliNav Service Worker — オフライン対応
  * app-shell: cache-first / OSM tiles: cache-first(+network fill) / data: stale-while-revalidate
  */
-const SHELL = 'helinav-shell-v2';
+const SHELL = 'helinav-shell-v3';
 const TILES = 'helinav-tiles';
 const APP_FILES = [
   './',
@@ -20,6 +20,7 @@ const APP_FILES = [
   './data/heliports.geojson',
   './data/navaids.geojson',
   './data/powerlines.geojson',
+  './data/airspace.geojson',
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];

@@ -36,32 +36,36 @@
         <span class="dot" id="dot-net" title="通信">NET</span>
         <span class="dot" id="dot-wake" title="画面常時ON">SCRN</span>
       </div>
-      <button id="btn-menu" class="iconbtn" title="メニュー" aria-label="メニュー">☰</button>
+      <button id="btn-menu" class="iconbtn" title="メニュー" aria-label="メニュー">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
     </div>
   </header>
 
-  <!-- 左サイド：レイヤー切替（大きなタッチ） -->
-  <nav id="layerbar" aria-label="表示レイヤー">
-    <button class="layer-toggle active" data-layer="airports"><span class="ic">✈️</span><span class="lbl">空港</span></button>
-    <button class="layer-toggle active" data-layer="heliports"><span class="ic">🏥</span><span class="lbl">ヘリ/病院</span></button>
-    <button class="layer-toggle active" data-layer="navaids"><span class="ic">📡</span><span class="lbl">VOR</span></button>
-    <button class="layer-toggle active" data-layer="hazards"><span class="ic">⚡</span><span class="lbl">送電線</span></button>
-    <button class="layer-toggle active" data-layer="route"><span class="ic">🧭</span><span class="lbl">ルート</span></button>
-  </nav>
-
-  <!-- 左下：ズーム(手袋/揺れでも押せる大ボタン) -->
+  <!-- 左下：ズーム -->
   <div id="zoombar">
-    <button id="zoom-in" class="fab" aria-label="拡大">＋</button>
-    <button id="zoom-out" class="fab" aria-label="縮小">－</button>
+    <button id="zoom-in" class="fab" aria-label="拡大">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+    <button id="zoom-out" class="fab" aria-label="縮小">
+      <svg viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
   </div>
 
   <!-- 右下：主要アクション -->
   <div id="actionbar">
-    <button id="btn-locate" class="fab" title="現在地に追従" aria-label="現在地に追従">◎</button>
+    <button id="btn-locate" class="fab" title="現在地に追従" aria-label="現在地に追従">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
     <button id="btn-orient" class="fab fab-txt" title="地図の向き" aria-label="地図の向き">N↑</button>
     <button id="btn-direct" class="fab fab-txt accent" title="ダイレクト" aria-label="ダイレクト">D→</button>
     <button id="btn-nrst" class="fab fab-txt" title="最寄り" aria-label="最寄り">NRST</button>
-    <button id="btn-route" class="fab" title="ルート作成" aria-label="ルート作成">✚</button>
+    <button id="btn-route" class="fab" title="ルート作成" aria-label="ルート作成">
+      <svg viewBox="0 0 24 24"><circle cx="5" cy="19" r="2.4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="19" cy="5" r="2.4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 17 L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="3.5 3"/></svg>
+    </button>
+    <button id="btn-layers" class="fab" title="レイヤー・空域" aria-label="レイヤー・空域">
+      <svg viewBox="0 0 24 24"><path d="M12 3 L21 8 L12 13 L3 8 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M3.5 12.5 L12 17 L20.5 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
   </div>
 
   <!-- ルート情報バー -->
@@ -90,7 +94,7 @@
       <span class="rb-spacer"></span>
       <button id="direct-close" class="minibtn">閉じる</button>
     </div>
-    <input type="search" id="direct-q" placeholder="識別コード / 名称 / 所在地で検索 (例: RJTT, 羽田)" autocomplete="off" />
+    <input type="search" id="direct-q" placeholder="識別コード / 名称 / 所在地 (例: RJTT, 羽田)" autocomplete="off" />
     <div id="direct-results" class="result-list"></div>
   </div>
 
@@ -106,6 +110,31 @@
       <button id="nrst-close" class="minibtn">閉じる</button>
     </div>
     <div id="nrst-results" class="result-list"></div>
+  </div>
+
+  <!-- レイヤー・空域 設定パネル -->
+  <div id="layers" class="hidden" role="dialog" aria-label="レイヤー設定">
+    <div class="panel-head">
+      <strong>レイヤー</strong>
+      <span class="rb-spacer"></span>
+      <button id="layers-close" class="minibtn">閉じる</button>
+    </div>
+    <div class="chip-row" id="layer-chips">
+      <button class="chip" data-layer="airports">空港</button>
+      <button class="chip" data-layer="heliports">ヘリ / 病院</button>
+      <button class="chip" data-layer="navaids">VOR / NDB</button>
+      <button class="chip" data-layer="hazards">送電線</button>
+      <button class="chip" data-layer="route">ルート</button>
+      <button class="chip" data-layer="airspace">空域</button>
+    </div>
+    <div class="panel-sub">空域クラス <small>(円は概略範囲。AIP Japan で要照合)</small></div>
+    <div class="chip-row" id="asp-chips">
+      <button class="chip asp-ctr" data-asp="CTR">管制圏</button>
+      <button class="chip asp-info" data-asp="INFO">情報圏</button>
+      <button class="chip asp-rstr" data-asp="RSTR">飛行回避 (原子力等)</button>
+      <button class="chip asp-tca" data-asp="TCA">進入管制区 (概略)</button>
+    </div>
+    <div class="rb-hint">重要空域 (管制圏・情報圏・飛行回避) は既定で表示されます。</div>
   </div>
 
   <!-- メニュー -->
@@ -127,8 +156,9 @@
       <div class="menu-note" id="cache-note"></div>
       <div class="menu-disclaimer">
         ⚠️ <b>参考情報アプリです。</b>本アプリのデータは概略・未検証を含みます。
-        飛行前ブリーフィング・航空図・AIP Japan・NOTAM 等の公式情報で必ず確認し、
-        最終判断はパイロットが行ってください。運航用の航法計器の代替にはなりません。
+        空域の円は概略範囲です。飛行前ブリーフィング・航空図・AIP Japan・NOTAM 等の
+        公式情報で必ず確認し、最終判断はパイロットが行ってください。
+        運航用の航法計器の代替にはなりません。
       </div>
     </div>
   </div>
