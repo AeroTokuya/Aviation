@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>HeliNav — VFR ヘリコプター ナビ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1622" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="HeliNav" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="lib/leaflet/leaflet.css" />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body class="theme-day">
+  <!-- 地図(回転コンテナ。トラックアップ時は画面対角を覆う正方形に拡大して回転) -->
+  <div id="maprot"><div id="map"></div></div>
+  <div id="attrib">&copy; OpenStreetMap contributors</div>
+
+  <!-- NAV バー(常時表示の飛行計器) -->
+  <header id="hud">
+    <div class="hud-grid">
+      <div class="hud-cell"><span class="hl">GS <small>kt</small></span><span class="hv" id="hud-gs">--</span></div>
+      <div class="hud-cell"><span class="hl">TRK <small>°M</small></span><span class="hv" id="hud-trk">---</span></div>
+      <div class="hud-cell"><span class="hl">ALT <small>ft</small></span><span class="hv" id="hud-alt">----</span></div>
+      <div class="hud-cell wpt"><span class="hl" id="hud-wpt">WPT</span><span class="hv hv-name" id="hud-wpname">-----</span></div>
+      <div class="hud-cell"><span class="hl">BRG <small>°M</small></span><span class="hv" id="hud-brg">---</span></div>
+      <div class="hud-cell"><span class="hl">DIST <small>NM</small></span><span class="hv" id="hud-dist">--</span></div>
+      <div class="hud-cell"><span class="hl">ETE</span><span class="hv" id="hud-ete">--:--</span></div>
+      <div class="hud-cell"><span class="hl">XTK <small>NM</small></span><span class="hv" id="hud-xtk">--</span></div>
+    </div>
+    <div class="hud-side">
+      <div class="dots">
+        <span class="dot" id="dot-gps" title="GPS">GPS</span>
+        <span class="dot" id="dot-net" title="通信">NET</span>
+        <span class="dot" id="dot-wake" title="画面常時ON">SCRN</span>
+      </div>
+      <button id="btn-menu" class="iconbtn" title="メニュー" aria-label="メニュー">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- 左下：ズーム -->
+  <div id="zoombar">
+    <button id="zoom-in" class="fab" aria-label="拡大">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+    <button id="zoom-out" class="fab" aria-label="縮小">
+      <svg viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <!-- 右下：主要アクション -->
+  <div id="actionbar">
+    <button id="btn-locate" class="fab" title="現在地に追従" aria-label="現在地に追従">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button id="btn-orient" class="fab fab-txt" title="地図の向き" aria-label="地図の向き">N↑</button>
+    <button id="btn-direct" class="fab fab-txt accent" title="ダイレクト" aria-label="ダイレクト">D→</button>
+    <button id="btn-nrst" class="fab fab-txt" title="最寄り" aria-label="最寄り">NRST</button>
+    <button id="btn-route" class="fab" title="ルート作成" aria-label="ルート作成">
+      <svg viewBox="0 0 24 24"><circle cx="5" cy="19" r="2.4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="19" cy="5" r="2.4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 17 L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="3.5 3"/></svg>
+    </button>
+    <button id="btn-layers" class="fab" title="レイヤー・空域" aria-label="レイヤー・空域">
+      <svg viewBox="0 0 24 24"><path d="M12 3 L21 8 L12 13 L3 8 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M3.5 12.5 L12 17 L20.5 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <!-- ルート情報バー -->
+  <div id="routebar" class="hidden">
+    <div class="rb-head">
+      <strong>ルート</strong>
+      <span id="rb-summary">距離 -- / 区間 --</span>
+      <span class="rb-spacer"></span>
+      <button id="rb-clear" class="minibtn">クリア</button>
+      <button id="rb-close" class="minibtn">閉じる</button>
+    </div>
+    <div id="rb-legs"></div>
+    <div class="rb-hint">地図をタップで WP 追加。行をタップでそのレグをアクティブ化（マゼンタ＝現在のレグ）。</div>
+  </div>
+
+  <!-- 施設情報 ボトムシート -->
+  <div id="sheet" class="hidden" role="dialog" aria-label="施設情報">
+    <div class="sheet-grab"></div>
+    <div id="sheet-body"></div>
+  </div>
+
+  <!-- Direct-To 検索パネル -->
+  <div id="direct" class="hidden" role="dialog" aria-label="ダイレクト検索">
+    <div class="panel-head">
+      <strong>D→ ダイレクト</strong>
+      <span class="rb-spacer"></span>
+      <button id="direct-close" class="minibtn">閉じる</button>
+    </div>
+    <input type="search" id="direct-q" placeholder="識別コード / 名称 / 所在地 (例: RJTT, 羽田)" autocomplete="off" />
+    <div id="direct-results" class="result-list"></div>
+  </div>
+
+  <!-- NRST 最寄りパネル -->
+  <div id="nrst" class="hidden" role="dialog" aria-label="最寄り施設">
+    <div class="panel-head">
+      <strong>NRST 最寄り</strong>
+      <div class="seg">
+        <button class="seg-btn active" data-nrst="airport">空港</button>
+        <button class="seg-btn" data-nrst="heli">ヘリ/病院</button>
+      </div>
+      <span class="rb-spacer"></span>
+      <button id="nrst-close" class="minibtn">閉じる</button>
+    </div>
+    <div id="nrst-results" class="result-list"></div>
+  </div>
+
+  <!-- レイヤー・空域 設定パネル -->
+  <div id="layers" class="hidden" role="dialog" aria-label="レイヤー設定">
+    <div class="panel-head">
+      <strong>レイヤー</strong>
+      <span class="rb-spacer"></span>
+      <button id="layers-close" class="minibtn">閉じる</button>
+    </div>
+    <div class="panel-sub">地図 (ベースマップ)</div>
+    <div class="chip-row" id="bm-chips">
+      <button class="chip" data-bm="gsi_pale">淡色 (地理院)</button>
+      <button class="chip" data-bm="gsi_std">標準 (地理院)</button>
+      <button class="chip" data-bm="osm">OSM</button>
+      <button class="chip" data-bm="gsi_photo">航空写真</button>
+    </div>
+    <div class="panel-sub">地物</div>
+    <div class="chip-row" id="layer-chips">
+      <button class="chip" data-layer="airports">空港</button>
+      <button class="chip" data-layer="heliports">ヘリ / 病院</button>
+      <button class="chip" data-layer="navaids">VOR / NDB</button>
+      <button class="chip" data-layer="hazards">送電線</button>
+      <button class="chip" data-layer="route">ルート</button>
+      <button class="chip" data-layer="airspace">空域</button>
+      <button class="chip" data-layer="wx">気象 (METAR)</button>
+    </div>
+    <div class="panel-sub">空域クラス <small>(円は概略範囲。AIP Japan で要照合)</small></div>
+    <div class="chip-row" id="asp-chips">
+      <button class="chip asp-ctr" data-asp="CTR">管制圏</button>
+      <button class="chip asp-info" data-asp="INFO">情報圏</button>
+      <button class="chip asp-rstr" data-asp="RSTR">飛行回避 (原子力等)</button>
+      <button class="chip asp-tca" data-asp="TCA">進入管制区 (概略)</button>
+    </div>
+    <div class="rb-hint">重要空域 (管制圏・情報圏・飛行回避) は既定で表示されます。</div>
+  </div>
+
+  <!-- メニュー -->
+  <div id="menu" class="hidden">
+    <div class="menu-panel">
+      <div class="menu-head"><strong>メニュー</strong><button id="menu-close" class="minibtn">×</button></div>
+      <button class="menu-item" id="mi-theme"><span>🌙</span> 昼 / 夜モード切替</button>
+      <button class="menu-item" id="mi-wx"><span>🌤️</span> 気象を今すぐ更新 (METAR/TAF)</button>
+      <button class="menu-item" id="mi-save-area"><span>🗺️</span> 表示エリアをオフライン保存</button>
+      <button class="menu-item" id="mi-hazards"><span>⚡</span> 表示範囲の送電線・障害物を取得 (OSM)</button>
+      <button class="menu-item" id="mi-import"><span>📥</span> 公式/自作 GeoJSON を取込</button>
+      <button class="menu-item" id="mi-sim"><span>🛰️</span> デモ飛行（ルートを模擬走行）</button>
+      <input type="file" id="import-file" accept=".geojson,.json" hidden />
+      <div class="menu-row">
+        <label>磁気偏差(西+): <input type="number" id="magvar" value="8" step="0.5" style="width:4em"> °</label>
+      </div>
+      <div class="menu-row">
+        <label>計画速度(ETE用・GPS無効時): <input type="number" id="gs" value="110" step="5" style="width:5em"> kt</label>
+      </div>
+      <div class="menu-row">
+        <label>燃料消費: <input type="number" id="fuel-burn" placeholder="--" step="5" style="width:4.5em"> L/h</label>
+        <label>搭載燃料: <input type="number" id="fuel-onboard" placeholder="--" step="10" style="width:4.5em"> L</label>
+      </div>
+      <div class="menu-note" id="cache-note"></div>
+      <div class="menu-disclaimer">
+        ⚠️ <b>参考情報アプリです。</b>本アプリのデータは概略・未検証を含みます。
+        空域の円は概略範囲です。飛行前ブリーフィング・航空図・AIP Japan・NOTAM 等の
+        公式情報で必ず確認し、最終判断はパイロットが行ってください。
+        運航用の航法計器の代替にはなりません。
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+
+  <script src="lib/leaflet/leaflet.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
