@@ -226,7 +226,6 @@ def estimate_ceiling(
     results: list[TargetResult],
     camera_elevation_ft: float,
     visibility_km: Optional[float],
-    visibility_is_lower_bound: bool,
 ) -> tuple[Optional[float], bool, list[str]]:
     """標高付きターゲットの可視/遮蔽から雲底 (AGL ft) を推定する。
 
@@ -354,9 +353,7 @@ def analyze(
     ]
 
     vis_km, vis_lb, results = estimate_visibility(ordered, ratios)
-    ceiling, unlimited, notes = estimate_ceiling(
-        results, camera_elevation_ft, vis_km, vis_lb
-    )
+    ceiling, unlimited, notes = estimate_ceiling(results, camera_elevation_ft, vis_km)
     oktas, cover_label = estimate_cloud_cover(current, sky_bbox)
 
     # 雲量が BKN 未満なら定義上シーリングは存在しない

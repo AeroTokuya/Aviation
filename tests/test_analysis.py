@@ -112,7 +112,7 @@ class TestCeiling:
             _tr("peak", 10, 4000, 0.01, False),  # 雲中: 予測比よりはるかに低い
         ]
         ceiling, unlimited, _ = analysis.estimate_ceiling(
-            results, camera_elevation_ft=0, visibility_km=30, visibility_is_lower_bound=False
+            results, camera_elevation_ft=0, visibility_km=30
         )
         assert not unlimited
         assert 2000 <= ceiling <= 4000
@@ -124,14 +124,14 @@ class TestCeiling:
             _tr("far", 5, 4000, 0.0, False),
         ]
         ceiling, unlimited, _ = analysis.estimate_ceiling(
-            results, camera_elevation_ft=0, visibility_km=2, visibility_is_lower_bound=False
+            results, camera_elevation_ft=0, visibility_km=2
         )
         assert unlimited
 
     def test_no_elevation_targets(self):
         results = [_tr("x", 1, None, 0.9, True)]
         ceiling, unlimited, notes = analysis.estimate_ceiling(
-            results, camera_elevation_ft=0, visibility_km=10, visibility_is_lower_bound=False
+            results, camera_elevation_ft=0, visibility_km=10
         )
         assert ceiling is None and not unlimited
         assert notes

@@ -39,6 +39,13 @@ def _status(cam: CameraConfig) -> str:
     return "estimate"
 
 
+def _get_camera(cam_id: str) -> CameraConfig:
+    cam = cameras.get(cam_id)
+    if cam is None:
+        raise HTTPException(404, f"カメラ {cam_id} は存在しません")
+    return cam
+
+
 def _try_analyze(cam: CameraConfig) -> Optional[analysis.Estimate]:
     """推定可能なカメラなら推定を実行。不可能/失敗なら None。"""
     if _status(cam) != "estimate":
@@ -50,6 +57,17 @@ def _try_analyze(cam: CameraConfig) -> Optional[analysis.Estimate]:
     return analysis.analyze(
         ref, cur, cam.targets, camera_elevation_ft=cam.elevation_ft, sky_bbox=cam.sky_bbox
     )
+
+
+def _analyze_with_status(cam: CameraConfig) -> tuple[str, Optional[analysis.Estimate]]:
+    """カメラの状態と推定結果を返す。推定が例外を出した場合は status="error"。"""
+    status = _status(cam)
+    if status != "estimate":
+        return status, None
+    try:
+        return status, _try_analyze(cam)
+    except Exception:
+        return "error", None
 
 
 def _camera_info(cam: CameraConfig) -> dict:
@@ -76,13 +94,9 @@ def list_cameras() -> list[dict]:
     out = []
     for cam in cameras.values():
         item = _camera_info(cam)
-        item["status"] = _status(cam)
+        status, est = _analyze_with_status(cam)
+        item["status"] = status
         item["summary"] = None
-        try:
-            est = _try_analyze(cam)
-        except Exception:
-            est = None
-            item["status"] = "error"
         if est is not None:
             item["summary"] = {
                 "visibility_km": est.visibility_km,
@@ -97,16 +111,8 @@ def list_cameras() -> list[dict]:
 
 @app.get("/api/cameras/{cam_id}/estimate")
 def camera_estimate(cam_id: str) -> dict:
-    cam = cameras.get(cam_id)
-    if cam is None:
-        raise HTTPException(404, f"カメラ {cam_id} は存在しません")
-    status = _status(cam)
-    est = None
-    if status == "estimate":
-        try:
-            est = _try_analyze(cam)
-        except Exception:
-            status = "error"
+    cam = _get_camera(cam_id)
+    status, est = _analyze_with_status(cam)
     return {
         "camera": _camera_info(cam),
         "status": status,
@@ -117,9 +123,7 @@ def camera_estimate(cam_id: str) -> dict:
 
 @app.get("/api/cameras/{cam_id}/image/{kind}")
 def camera_image(cam_id: str, kind: str) -> Response:
-    cam = cameras.get(cam_id)
-    if cam is None:
-        raise HTTPException(404, f"カメラ {cam_id} は存在しません")
+    cam = _get_camera(cam_id)
     if kind == "current":
         img = sources.current_image(cam)
     elif kind == "reference":
@@ -141,9 +145,7 @@ def capture_reference(cam_id: str) -> dict:
 
     快晴で遠方までよく見える日に実行すること。
     """
-    cam = cameras.get(cam_id)
-    if cam is None:
-        raise HTTPException(404, f"カメラ {cam_id} は存在しません")
+    cam = _get_camera(cam_id)
     if cam.source_type != "url":
         raise HTTPException(400, "基準画像の取得は url 型カメラのみ対応です")
     img = sources.current_image(cam)
